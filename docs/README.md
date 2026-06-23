@@ -7,11 +7,14 @@ del producto viven en la **vault de Obsidian**, en el repo hermano `obsidian-vau
 
 | Documentación (vault) | Componente de este repo |
 |---|---|
-| `IDEA`, `Prueba de Persona Única` | la visión completa |
+| `IDEA`, `Prueba de Persona Única` | la visión de las dos capas |
 | `Flujo de KYC` | `packages/sdk/` + `scripts/e2e_demo.sh` |
-| `Diseño del Circuito ZK` | `circuits/src/kyc.circom` |
-| `Contrato Verificador (Soroban)` | `contracts/kyc_verifier/src/lib.rs` |
-| `Modelo de Datos` | credencial en `issuer/`, storage en `contracts/` |
+| `Diseño del Circuito ZK` | `identity/circuits/src/kyc.circom` |
+| `Contrato Verificador (Soroban)` | `identity/contracts/kyc_verifier/src/lib.rs` |
+| `Modelo de Datos` | credencial en `identity/issuer/`, storage en `identity/contracts/` |
+| `Plataforma de Opinión Verificada` | `platform/contracts/opinion_board` + `platform/api` |
+| `Curaduría y Agentes Validadores` | `platform/curation` |
+| `Identidad Pública vs Anónima` | modelo de identidad de `platform/` (seudónimo estable) |
 | `09 - Tools/Plan de armado con IA` | guía paso a paso para desarrollar |
 | `Estructura del Codigo` | esta misma estructura de monorepo |
 

@@ -1,21 +1,21 @@
 {
-  "name": "@behuman/sdk",
+  "name": "@behuman/curation",
   "version": "0.0.0",
   "private": true,
-  "description": "SDK cliente de beHuman — prover ZK + orquestación de tx Stellar",
+  "description": "Agentes validadores (IA) + cola de moderación humana de la plataforma",
   "type": "module",
   "main": "src/index.ts",
-  "types": "src/index.ts",
   "scripts": {
+    "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "test": "echo \"(sin tests aún)\" && exit 0"
   },
   "dependencies": {
-    "@behuman/shared": "*",
-    "@stellar/stellar-sdk": "^13.0.0",
-    "snarkjs": "^0.7.4"
+    "@anthropic-ai/sdk": "^0.32.0",
+    "@behuman/shared": "*"
   },
   "devDependencies": {
+    "tsx": "^4.7.0",
     "typescript": "^5.4.0"
   }
 }

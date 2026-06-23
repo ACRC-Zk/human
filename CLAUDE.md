@@ -5,10 +5,13 @@
 
 ## Qué es beHuman
 
-**KYC con Zero-Knowledge sobre Stellar** — *proof of personhood*: una persona prueba que es
-**real y única** sin revelar su PII. Verifica su identidad una vez (off-chain), genera una
-**prueba ZK** y la verifica un **contrato Soroban** que la registra sin saber quién es.
-Encima se construye una plataforma de opinión verificada (capa 2, post-MVP).
+Proyecto de **dos capas**:
+- **CAPA 1 · Identidad (KYC-ZK):** *proof of personhood*. Una persona prueba que es **real y
+  única** sin revelar su PII; un contrato Soroban la verifica y registra. Expone el puente
+  **`is_verified(address)`**.
+- **CAPA 2 · Plataforma de opinión:** personas verificadas opinan y publican artículos/
+  estudios como humanos únicos, sin exponer su identidad, con curaduría (agentes IA +
+  moderación). Solo depende de la CAPA 1 por `is_verified(address)`.
 
 ## ⚠️ Antes de escribir código (regla de Stellar)
 
@@ -26,17 +29,25 @@ Encima se construye una plataforma de opinión verificada (capa 2, post-MVP).
 - **Monorepo único** (este repo). Docs separadas en la vault de Obsidian.
 - Nombre de trabajo: **beHuman**. Organización GitHub: **ACRC-Zk**.
 
-## Estructura
+## Estructura (por capas)
 
-| Carpeta | Qué es |
-|---|---|
-| `circuits/` | Circuito Circom (`kyc.circom`) |
-| `contracts/kyc_verifier/` | Contrato Soroban (`verify_and_register`, `is_verified`) |
-| `issuer/` | Issuer KYC **mock** (TS) — firma credenciales de prueba |
-| `packages/sdk/` | Prover + orquestación de tx Stellar (TS, compartido) |
-| `web/` | Frontend **React + Vite + TS** |
-| `scripts/` | `deploy_testnet.sh`, `e2e_demo.sh` |
-| `docs/` | Puente a la vault |
+| Carpeta | Capa | Qué es |
+|---|---|---|
+| `identity/circuits/` | 1 | Circuito Circom (`kyc.circom`) |
+| `identity/contracts/kyc_verifier/` | 1 | Soroban (`verify_and_register`, `is_verified`) ← **el puente** |
+| `identity/issuer/` | 1 | Issuer KYC **mock** (TS) |
+| `platform/contracts/opinion_board/` | 2 | Soroban: ancla post (autor verificado + hash) |
+| `platform/api/` | 2 | Backend: feed, posts, contenido off-chain (TS) |
+| `platform/curation/` | 2 | Agentes validadores (IA, Claude API) + moderación (TS) |
+| `packages/sdk/` | — | Prover + orquestación de tx Stellar (TS, compartido) |
+| `packages/shared/` | — | Tipos TS compartidos (identidad + plataforma) |
+| `web/` | — | Frontend **React + Vite + TS** (único) |
+| `scripts/` · `docs/` | — | Deploy/e2e · puente a la vault |
+
+> Los contratos Rust (ambas capas) son miembros del **workspace Cargo raíz** (`/Cargo.toml`):
+> `stellar contract build` los compila todos.
+> Modelo de identidad en la plataforma: **seudónimo estable** (posts linkeables, PII oculta).
+> Contenido de la CAPA 2: **híbrido** (ancla on-chain + contenido off-chain en `api`).
 
 ## Dónde está cada cosa en la vault (la fuente de verdad del diseño)
 

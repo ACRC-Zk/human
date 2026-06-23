@@ -29,7 +29,14 @@ export async function buildVerifyTx(
   throw new Error("buildVerifyTx no implementado — ver vault: Flujo de KYC (Fase 3)");
 }
 
-/** Consulta is_verified en el contrato. STUB. */
+/** Consulta is_verified en el contrato kyc_verifier (CAPA 1). STUB. */
 export async function isVerified(_address: string): Promise<boolean> {
   throw new Error("isVerified no implementado — ver vault: Flujo de KYC (Fase 4)");
+}
+
+// ─── CAPA 2 · Plataforma ────────────────────────────────────────────────────
+
+/** Ancla un post en el contrato opinion_board (autor verificado + hash). STUB. */
+export async function anchorPost(_author: string, _contentHash: string): Promise<bigint> {
+  throw new Error("anchorPost no implementado — ver vault: Plataforma de Opinión Verificada");
 }

@@ -19,14 +19,14 @@ target/
 .soroban/
 
 # --- Circuitos ZK (artefactos de build pesados) ---
-circuits/build/
+**/circuits/build/
 *.r1cs
 *.wasm
 *.zkey
 *.ptau
 *.sym
 witness.wtns
-circuits/**/verification_key.json
+**/verification_key.json
 
 # --- Coordinación entre agentes (no es código del producto) ---
 .comms/

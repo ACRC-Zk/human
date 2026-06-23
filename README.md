@@ -3,40 +3,48 @@
 > **KYC con Zero-Knowledge sobre Stellar** — *proof of personhood*: probás que sos una
 > persona real y **única** sin revelar quién sos. Monorepo del producto.
 
-beHuman permite que una persona verifique su identidad una sola vez (off-chain, sin que su
-PII toque la cadena) y luego **demuestre con una prueba ZK** que cumple ciertas condiciones
-(es persona única, mayor de edad, país permitido…) ante cualquier dApp de Stellar. La
-prueba se **verifica en un contrato Soroban**, que registra la dirección como verificada
-sin saber quién es.
+beHuman tiene **dos capas**: una de **identidad** (KYC-ZK, *proof of personhood*) y una de
+**aplicación** (plataforma de opinión verificada). Una persona verifica su identidad una vez
+(off-chain, sin que su PII toque la cadena), obtiene una identidad **única y anónima**
+on-chain, y eso le habilita opinar y publicar como **humano real y único** sin exponer quién
+es. Las dos capas se unen por un solo punto: **`is_verified(address)`**.
 
 📚 **La documentación, diseño y decisiones viven en la vault de Obsidian** (repo hermano
 `obsidian-vault-zk`). Este repo es **solo el código**. Ver [`docs/`](./docs/README.md).
 
 ---
 
-## 🗂️ Estructura del monorepo
-
-| Carpeta | Qué es | Stack |
-|---|---|---|
-| [`circuits/`](./circuits/) | Circuito ZK que prueba la credencial KYC | Circom + Groth16 (snarkjs) |
-| [`contracts/`](./contracts/) | Contrato verificador on-chain | Rust + Soroban SDK |
-| [`issuer/`](./issuer/) | Issuer KYC **mock** que firma credenciales de prueba | TypeScript / Node |
-| [`packages/sdk/`](./packages/sdk/) | Lógica cliente compartida: genera la prueba + arma la tx Stellar | TypeScript |
-| [`web/`](./web/) | Frontend de la app | **React + Vite + TypeScript** |
-| [`scripts/`](./scripts/) | Deploy a testnet + demo end-to-end | Bash |
-| [`docs/`](./docs/) | Puente a la vault de documentación | — |
+## 🗂️ Estructura del monorepo (por capas)
 
 ```text
 beHuman/
-├── circuits/        # Circom — circuito kyc
-├── contracts/       # Soroban — kyc_verifier (Rust workspace)
-├── issuer/          # mock issuer (firma credenciales)
+├── identity/                 # ── CAPA 1 · KYC con ZK ──
+│   ├── circuits/             #   Circom — circuito kyc
+│   ├── contracts/            #   Soroban — kyc_verifier  ← EL PUENTE (is_verified)
+│   └── issuer/               #   mock issuer (firma credenciales)
+│
+├── platform/                 # ── CAPA 2 · Plataforma de opinión ──
+│   ├── contracts/            #   Soroban — opinion_board (ancla: autor + hash)
+│   ├── api/                  #   backend: feed, posts, contenido off-chain
+│   └── curation/             #   agentes validadores (IA) + moderación humana
+│
 ├── packages/
-│   └── sdk/         # prover + orquestación de tx (TS, compartido)
-├── web/             # React + Vite (frontend)
-├── scripts/         # deploy_testnet.sh, e2e_demo.sh
-└── docs/            # enlaza a la vault de Obsidian
+│   ├── sdk/                  # cliente: prueba ZK + tx Stellar (compartido)
+│   └── shared/               # tipos TS compartidos (identidad + plataforma)
+│
+├── web/                      # React + Vite + TypeScript (frontend único)
+├── scripts/                  # deploy_testnet.sh, e2e_demo.sh
+└── docs/                     # enlaza a la vault de Obsidian
 ```
+
+| Capa | Carpeta | Stack |
+|---|---|---|
+| 1 · Identidad | `identity/circuits` · `identity/contracts/kyc_verifier` · `identity/issuer` | Circom+Groth16 · Rust/Soroban · TS |
+| 2 · Plataforma | `platform/contracts/opinion_board` · `platform/api` · `platform/curation` | Rust/Soroban · TS · TS + Claude API |
+| Compartido | `packages/sdk` · `packages/shared` · `web` | TypeScript · React+Vite |
+
+> 🌉 La CAPA 2 solo depende de la CAPA 1 por `is_verified(address)`. El contrato
+> `opinion_board` exige que el autor esté verificado antes de anclar un post.
 
 ---
 
@@ -49,7 +57,7 @@ beHuman/
 npm install                 # instala los workspaces JS (web, issuer, packages/*)
 
 npm run dev                 # levanta el frontend React (web/)
-make contract-build         # compila el contrato Soroban
+make contracts-build        # compila los contratos Soroban (ambas capas)
 make circuit-compile        # compila el circuito Circom
 ```
 
@@ -59,13 +67,15 @@ Ver targets disponibles en el [`Makefile`](./Makefile).
 
 ## 🧱 Estado
 
-- [x] Estructura del monorepo
-- [ ] Circuito `kyc.circom` (ver `circuits/`)
-- [ ] Contrato `kyc_verifier` (ver `contracts/`)
-- [ ] Issuer mock (ver `issuer/`)
-- [ ] SDK cliente / prover (ver `packages/sdk/`)
-- [ ] Frontend React (ver `web/`)
-- [ ] Deploy testnet + demo E2E (ver `scripts/`)
+- [x] Estructura del monorepo (por capas)
+- [ ] **CAPA 1** — Circuito `kyc.circom` (`identity/circuits/`)
+- [ ] **CAPA 1** — Contrato `kyc_verifier` (`identity/contracts/`)
+- [ ] **CAPA 1** — Issuer mock (`identity/issuer/`)
+- [ ] **CAPA 2** — Contrato `opinion_board` (`platform/contracts/`)
+- [ ] **CAPA 2** — Backend `api` + curaduría (`platform/api`, `platform/curation`)
+- [ ] SDK + tipos compartidos (`packages/`)
+- [ ] Frontend React (`web/`)
+- [ ] Deploy testnet + demo E2E (`scripts/`)
 
 ## 📄 Licencia
 

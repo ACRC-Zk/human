@@ -1,6 +1,9 @@
 [workspace]
 resolver = "2"
-members = ["kyc_verifier"]
+members = [
+    "identity/contracts/kyc_verifier",
+    "platform/contracts/opinion_board",
+]
 
 [workspace.dependencies]
 # TODO: fijar la versión del SDK con soporte de las primitivas ZK (P25/P26:
