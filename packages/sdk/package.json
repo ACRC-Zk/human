@@ -1,0 +1,20 @@
+{
+  "name": "@behuman/sdk",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SDK cliente de beHuman — prover ZK + orquestación de tx Stellar",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "echo \"(sin tests aún)\" && exit 0"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "^13.0.0",
+    "snarkjs": "^0.7.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}
