@@ -27,6 +27,13 @@ target/
 *.sym
 witness.wtns
 **/verification_key.json
+# Intermedios regenerables del pipeline ZK (el snapshot de la prueba vive en
+# kyc_verifier/src/testdata.rs, generado con scripts/gen_testdata.mjs)
+**/circuits/input.json
+**/circuits/address_hash.hex
+
+# --- Soroban test snapshots (generados al correr los tests) ---
+**/test_snapshots/
 
 # --- Coordinación entre agentes (no es código del producto) ---
 .comms/

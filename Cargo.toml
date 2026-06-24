@@ -6,9 +6,11 @@ members = [
 ]
 
 [workspace.dependencies]
-# TODO: fijar la versión del SDK con soporte de las primitivas ZK (P25/P26:
-# BN254 / Poseidon). Ver docs de soroban-sdk en `09 - Tools/Recursos ZK & Privacy en Stellar`.
-soroban-sdk = "22"
+# soroban-sdk 25.x: trae las host functions BLS12-381 (crypto::bls12_381, CAP-0059)
+# que usa el verificador Groth16 oficial. NOTA: las primitivas BN254/Poseidon nativas
+# siguen siendo CAP-0074/0075 (propuestas, no disponibles) — por eso la CAPA 1 usa
+# BLS12-381 (ver identity/circuits/src/kyc.circom y el README del contrato).
+soroban-sdk = "25.1.0"
 
 [profile.release]
 opt-level = "z"
