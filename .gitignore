@@ -52,3 +52,6 @@ Thumbs.db
 !.vscode/extensions.json
 /web/vite.config.js
 /web/vite.config.d.ts
+
+# --- Deploy local (ids + secretos efímeros de testnet) ---
+/.deploy/

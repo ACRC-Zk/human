@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@behuman/shared": "*",
-    "@stellar/stellar-sdk": "^13.0.0",
+    "@stellar/stellar-sdk": "^16.0.1",
     "snarkjs": "^0.7.4"
   },
   "devDependencies": {

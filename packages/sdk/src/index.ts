@@ -7,7 +7,7 @@ import * as snarkjs from "snarkjs";
 import * as StellarSdk from "@stellar/stellar-sdk";
 import type { Capa1Credential } from "@behuman/shared";
 import { circuitsBuildDir } from "./poseidonBls.js";
-import { encodeProof, fieldTo32, type SnarkProof } from "./blsEncode.js";
+import { encodeProof, fieldTo32, g1ToBytes, g2ToBytes, type SnarkProof } from "./blsEncode.js";
 
 export * from "./poseidonBls.js";
 export * from "./merkle.js";
@@ -83,6 +83,68 @@ function server(cfg: StellarConfig) {
 }
 
 const scvBytes = (b: Uint8Array) => xdr.ScVal.scvBytes(Buffer.from(b));
+const entry = (key: string, val: StellarSdk.xdr.ScVal) =>
+  new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol(key), val });
+
+export interface SnarkVK {
+  vk_alpha_1: string[];
+  vk_beta_2: string[][];
+  vk_gamma_2: string[][];
+  vk_delta_2: string[][];
+  IC: string[][];
+}
+
+/** Codifica la verification key de snarkjs al tipo VerificationKey del contrato. */
+export function encodeVerificationKey(vk: SnarkVK): StellarSdk.xdr.ScVal {
+  const g1 = (p: string[]) => scvBytes(g1ToBytes(p as [string, string]));
+  const g2 = (p: string[][]) => scvBytes(g2ToBytes(p as [string[], string[]]));
+  // Claves Symbol ordenadas alfabéticamente: alpha < beta < delta < gamma < ic.
+  return xdr.ScVal.scvMap([
+    entry("alpha", g1(vk.vk_alpha_1)),
+    entry("beta", g2(vk.vk_beta_2)),
+    entry("delta", g2(vk.vk_delta_2)),
+    entry("gamma", g2(vk.vk_gamma_2)),
+    entry("ic", xdr.ScVal.scvVec(vk.IC.map((p) => g1(p)))),
+  ]);
+}
+
+/** Inicializa el contrato con el issuer root de confianza y la VK. */
+export async function initVerifier(
+  cfg: StellarConfig,
+  signerSecret: string,
+  issuerRoot: string,
+  vk: SnarkVK,
+): Promise<string> {
+  const srv = server(cfg);
+  const kp = Keypair.fromSecret(signerSecret);
+  const account = await srv.getAccount(kp.publicKey());
+  const contract = new Contract(cfg.contractId);
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: cfg.networkPassphrase,
+  })
+    .addOperation(
+      contract.call(
+        "init",
+        Address.fromString(kp.publicKey()).toScVal(),
+        scvBytes(fieldTo32(issuerRoot)),
+        encodeVerificationKey(vk),
+      ),
+    )
+    .setTimeout(60)
+    .build();
+  const prepared = await srv.prepareTransaction(tx);
+  prepared.sign(kp);
+  const sent = await srv.sendTransaction(prepared);
+  if (sent.status === "ERROR") throw new Error(`init error: ${JSON.stringify(sent.errorResult)}`);
+  let res = await srv.getTransaction(sent.hash);
+  for (let i = 0; i < 30 && res.status === "NOT_FOUND"; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    res = await srv.getTransaction(sent.hash);
+  }
+  if (res.status !== "SUCCESS") throw new Error(`init tx ${sent.hash} status=${res.status}`);
+  return sent.hash;
+}
 
 /** Arma los ScVal de `verify_and_register(address, proof, public_inputs)`. */
 export function buildVerifyArgs(address: string, gen: GeneratedProof): StellarSdk.xdr.ScVal[] {
