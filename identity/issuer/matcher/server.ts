@@ -12,8 +12,9 @@ import { dirname, resolve } from "node:path";
 import dotenv from "dotenv";
 import express from "express";
 import multer from "multer";
-import type { MatchResult } from "@behuman/shared";
+import type { EnrollmentResult, MatchResult } from "@behuman/shared";
 import { getProvider } from "./provider.js";
+import { enrollVerifiedHuman } from "../src/index.js";
 
 // Cargar .env desde la raíz del repo (matcher/ está en identity/issuer/matcher).
 const here = dirname(fileURLToPath(import.meta.url));
@@ -57,6 +58,41 @@ app.post(
     } catch (err) {
       console.error("[verify] error:", (err as Error).message);
       res.status(500).json({ error: "gate_failed" });
+    }
+  },
+);
+
+app.post(
+  "/enroll",
+  upload.fields([
+    { name: "document", maxCount: 1 },
+    { name: "selfie", maxCount: 20 },
+  ]),
+  async (req, res) => {
+    const files = req.files as MulterFiles | undefined;
+    const document = files?.document?.[0]?.buffer;
+    const selfieFrames = (files?.selfie ?? []).map((f) => f.buffer);
+    const commitment = String(req.body?.commitment ?? "");
+    const docId = String(req.body?.docId ?? "");
+
+    if (!document) return res.status(400).json({ error: "missing_document" });
+    if (selfieFrames.length === 0) return res.status(400).json({ error: "missing_selfie" });
+    if (!commitment) return res.status(400).json({ error: "missing_commitment" });
+    if (!docId) return res.status(400).json({ error: "missing_docId" });
+
+    try {
+      const result: EnrollmentResult = await enrollVerifiedHuman({
+        document,
+        selfieFrames,
+        commitment,
+        docId,
+      });
+      // Log PII-free: sin docId ni imágenes.
+      console.log(`[enroll] frames=${selfieFrames.length} ok=${result.ok} reasons=${result.reasons.join(",")}`);
+      res.json(result);
+    } catch (err) {
+      console.error("[enroll] error:", (err as Error).message);
+      res.status(500).json({ error: "enroll_failed" });
     }
   },
 );

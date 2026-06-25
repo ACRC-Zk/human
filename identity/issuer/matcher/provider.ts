@@ -6,6 +6,7 @@
 import type { IdentityProviderKind, MatchResult } from "@behuman/shared";
 import { MatcherTestnetProvider } from "./testnetProvider.js";
 import { RenaperProvider } from "./renaperProvider.js";
+import { DevProvider } from "./devProvider.js";
 
 /** Entrada del gate: foto del DNI + frames de la cámara en vivo. PII efímera. */
 export interface GateInput {
@@ -19,12 +20,10 @@ export interface IdentityProvider {
   verifyIdentity(input: GateInput): Promise<MatchResult>;
 }
 
-let cached: IdentityProvider | null = null;
-
 /** Devuelve el provider activo según `IDENTITY_PROVIDER` (default: testnet). */
 export function getProvider(): IdentityProvider {
-  if (cached) return cached;
   const kind = (process.env.IDENTITY_PROVIDER ?? "testnet") as IdentityProviderKind;
-  cached = kind === "renaper" ? new RenaperProvider() : new MatcherTestnetProvider();
-  return cached;
+  if (kind === "renaper") return new RenaperProvider();
+  if (kind === "dev") return new DevProvider();
+  return new MatcherTestnetProvider();
 }

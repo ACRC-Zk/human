@@ -1,3 +1,4 @@
+/// <reference path="./snarkjs.d.ts" />
 // @behuman/sdk — Puente de la Capa 1: credencial -> prueba ZK -> tx Stellar.
 // 📐 Ver `Flujo de KYC` (Fases 2–4) y `Puente-KYC-a-ZK` en la vault.
 import { createHash } from "node:crypto";

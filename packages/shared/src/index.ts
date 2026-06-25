@@ -25,8 +25,8 @@ export interface MatchResult {
   reasons: string[]; // motivos de rechazo si ok=false
 }
 
-/** Provider de identidad intercambiable (testnet hoy; RENAPER/SID en prod). */
-export type IdentityProviderKind = "testnet" | "renaper";
+/** Provider de identidad intercambiable (testnet hoy; RENAPER/SID en prod; dev = solo test). */
+export type IdentityProviderKind = "testnet" | "renaper" | "dev";
 
 /**
  * Atributos atestados a partir del documento. Off-chain y efímeros: se usan para
