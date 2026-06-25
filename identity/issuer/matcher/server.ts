@@ -28,6 +28,16 @@ const upload = multer({
 const app = express();
 app.use(express.json());
 
+// CORS: el frontend (Vite, :5173) hace requests cross-origin al gate (:8787).
+const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "*";
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", CORS_ORIGIN);
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+
 app.get("/health", (_req, res) => {
   res.json({ ok: true, provider: getProvider().kind, threshold: Number(process.env.MATCH_THRESHOLD ?? 0.6) });
 });
