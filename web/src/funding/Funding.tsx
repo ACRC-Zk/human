@@ -18,7 +18,12 @@ import {
   refund as refundCampaign,
   type Position,
 } from "./api";
-import { generateFundingOpinionProof, handleOfCampaign } from "./zk3";
+import {
+  generateFundingOpinionProof,
+  handleOfCampaign,
+  fundingChallenge,
+  signFundingAction,
+} from "./zk3";
 
 const txUrl = (hash: string) => `https://stellar.expert/explorer/testnet/tx/${hash}`;
 // Una tx real de Stellar es un hash de 64 hex; los mocks de dev son cortos/prefijados.
@@ -32,9 +37,10 @@ export function Funding({ onBack }: { onBack: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // donación
+  // donación — la wallet es EFÍMERA POR DONACIÓN (RT-05): se regenera en cada doDonate.
   const [amount, setAmount] = useState("100");
   const [donorWallet, setDonorWallet] = useState<string | null>(null);
+  const [donorSecret, setDonorSecret] = useState<string | null>(null); // para firmar position/refund
   const [position, setPosition] = useState<Position | null>(null);
   const [lastTx, setLastTx] = useState<string | null>(null);
 
@@ -56,6 +62,8 @@ export function Funding({ onBack }: { onBack: () => void }) {
     setError(null);
     setLastTx(null);
     setPosition(null);
+    setDonorWallet(null);
+    setDonorSecret(null);
     setSigners([]);
     const o = await getOpinions(c.id).catch(() => ({ opinions: [], sentiment: { support: 0, oppose: 0 } }));
     setOpinions(o.opinions);
@@ -74,14 +82,19 @@ export function Funding({ onBack }: { onBack: () => void }) {
     try {
       setBusy("Generando prueba de personhood (ZK) en tu dispositivo…");
       const mp = await membership();
-      // Wallet de donación = seudónimo efímero (no el address del KYC).
-      const wallet = donorWallet ?? StellarSdk.Keypair.random().publicKey();
+      // RT-05: wallet de donación = seudónimo efímero NUEVO en cada donación (no por sesión).
+      const kp = StellarSdk.Keypair.random();
+      const wallet = kp.publicKey();
       setDonorWallet(wallet);
+      setDonorSecret(kp.secret());
       setBusy("Donando (entra al vault Blend para generar yield)…");
       const r = await donate(sel.id, wallet, amount, mp);
       if (r.raisedAmount) setSel({ ...sel, raisedAmount: r.raisedAmount });
       setCampaigns((cs) => cs.map((c) => (c.id === sel.id ? { ...c, raisedAmount: r.raisedAmount ?? c.raisedAmount } : c)));
-      setPosition(await getPosition(sel.id, wallet));
+      // RT-05: /position requiere prueba de titularidad (firma con la secret de la wallet).
+      const posChallenge = fundingChallenge("refund", sel.id, `position:${wallet}`);
+      const posSig = signFundingAction(kp.secret(), posChallenge);
+      setPosition(await getPosition(sel.id, wallet, posSig.signature));
       setBusy(null);
     } catch (e) {
       setBusy(null);
@@ -113,7 +126,12 @@ export function Funding({ onBack }: { onBack: () => void }) {
     setError(null);
     try {
       setBusy("Aprobando hito (firma de la plataforma)…");
-      await approveMilestone(sel.id, milestoneId, sel.signers.platform);
+      // RT-01: la plataforma FIRMA el challenge con su secret (demo: signerSecretsDev).
+      const sec = sel.signerSecretsDev?.platform;
+      if (!sec) throw new Error("Sin secret de la plataforma para firmar (demo dev).");
+      const challenge = fundingChallenge("approve", sel.id, milestoneId);
+      const signature = signFundingAction(sec, challenge);
+      await approveMilestone(sel.id, milestoneId, signature);
       setSel({
         ...sel,
         milestones: sel.milestones.map((m) => (m.id === milestoneId ? { ...m, status: "approved" } : m)),
@@ -130,7 +148,19 @@ export function Funding({ onBack }: { onBack: () => void }) {
     setError(null);
     try {
       setBusy("Liberando fondos a la causa (release 2-de-3 + meta)…");
-      const r = await releaseCampaign(sel.id, signers);
+      // RT-01: cada firmante seleccionado FIRMA el challenge "release:<id>:<raised>".
+      const secrets = sel.signerSecretsDev;
+      if (!secrets) throw new Error("Sin secrets de firmantes para firmar (demo dev).");
+      const byAddr: Record<string, string> = {
+        [sel.signers.cause]: secrets.cause,
+        [sel.signers.platform]: secrets.platform,
+        [sel.signers.neutral]: secrets.neutral,
+      };
+      const challenge = fundingChallenge("release", sel.id, sel.raisedAmount);
+      const signatures = signers
+        .filter((addr) => byAddr[addr])
+        .map((addr) => signFundingAction(byAddr[addr], challenge));
+      const r = await releaseCampaign(sel.id, signatures);
       setLastTx(r.txHash);
       setSel({ ...sel, state: "released" });
       setBusy(null);
@@ -141,11 +171,14 @@ export function Funding({ onBack }: { onBack: () => void }) {
   }
 
   async function doRefund() {
-    if (!sel || !donorWallet) return;
+    if (!sel || !donorWallet || !donorSecret) return;
     setError(null);
     try {
       setBusy("Reembolsando tu aporte (todo-o-nada)…");
-      const r = await refundCampaign(sel.id, donorWallet);
+      // RT-01: el donante prueba titularidad de su wallet firmando el challenge.
+      const challenge = fundingChallenge("refund", sel.id, donorWallet);
+      const signature = signFundingAction(donorSecret, challenge);
+      const r = await refundCampaign(sel.id, donorWallet, signature);
       setPosition(null);
       setBusy(null);
       setError(null);

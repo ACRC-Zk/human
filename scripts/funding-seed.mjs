@@ -1,5 +1,11 @@
 // Seed de campañas para probar el Funding ZK (CAPA 3) en local (modo dev).
 // Uso: node scripts/funding-seed.mjs   (con la API levantada en FUNDING_API_PORT)
+//
+// RT-01: los firmantes son KEYPAIRS REALES (no strings inventados). La API en dev guarda
+// signerSecretsDev para que el panel validador de la web pueda FIRMAR el challenge de
+// approve/release y la API verifique la firma criptográficamente.
+import { Keypair } from "@stellar/stellar-sdk";
+
 const BASE = process.env.FUNDING_API_URL ?? `http://localhost:${process.env.FUNDING_API_PORT ?? 8789}`;
 
 const post = (path, body) =>
@@ -12,12 +18,15 @@ const post = (path, body) =>
     return r.json();
   });
 
-// Firmantes de ejemplo (en dev cualquier address G... sirve; no se firma realmente).
-const signers = {
-  cause: "GCAUSE_DEV_EXAMPLE_ADDRESS_AAAAAAAAAAAAAAAAAAAAAAAAA",
-  platform: "GPLATFORM_DEV_EXAMPLE_ADDRESS_AAAAAAAAAAAAAAAAAAAAAA",
-  neutral: process.env.FUNDING_NEUTRAL_ADDRESS ?? "GNEUTRAL_DEV_EXAMPLE_ADDRESS_AAAAAAAAAAAAAAAAAAAAA",
-};
+// Firmantes con keypairs REALES por campaña (la API en dev los deriva y guarda).
+const newSigners = () => ({
+  cause: Keypair.random().secret(),
+  platform: Keypair.random().secret(),
+  neutral: process.env.FUNDING_NEUTRAL_SECRET ?? Keypair.random().secret(),
+});
+
+const s1 = newSigners();
+const s2 = newSigners();
 
 const campaigns = [
   {
@@ -25,8 +34,8 @@ const campaigns = [
     summary: "Construir dos aulas y comprar material didáctico para 80 chicos.",
     goalAmount: "500",
     deadline: Date.now() + 30 * 24 * 3600 * 1000,
-    causeWallet: signers.cause,
-    signers,
+    causeWallet: Keypair.fromSecret(s1.cause).publicKey(),
+    signerSecretsDev: s1,
     milestones: [
       { title: "Comprar materiales de construcción" },
       { title: "Terminar las aulas y entregar material" },
@@ -37,8 +46,8 @@ const campaigns = [
     summary: "Plantar 3.000 árboles nativos y monitorear su crecimiento un año.",
     goalAmount: "1000",
     deadline: Date.now() + 45 * 24 * 3600 * 1000,
-    causeWallet: signers.cause,
-    signers,
+    causeWallet: Keypair.fromSecret(s2.cause).publicKey(),
+    signerSecretsDev: s2,
     milestones: [{ title: "Plantación inicial" }, { title: "Monitoreo y reposición" }],
   },
 ];

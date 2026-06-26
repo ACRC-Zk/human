@@ -37,6 +37,7 @@ pub enum Error {
     NothingToRefund = 9,
     BadAmount = 10,
     InvalidConfig = 11,
+    DeadlinePassed = 12,
 }
 
 #[contracttype]
@@ -73,18 +74,28 @@ pub struct CampaignController;
 #[contractimpl]
 impl CampaignController {
     /// Inicializa la campaña. `signers` debe tener exactamente 3 (causa, plataforma, neutral).
+    ///
+    /// RT-03: exige `admin.require_auth()` para evitar front-running de la configuración
+    /// (deploy + init no son atómicos). El `admin` debe ser uno de los `signers` (la
+    /// plataforma típicamente), garantizando que solo una parte legítima puede configurar.
     pub fn init(
         env: Env,
+        admin: Address,
         asset: Address,
         cause: Address,
         goal: i128,
         deadline: u64,
         signers: Vec<Address>,
     ) -> Result<(), Error> {
+        admin.require_auth();
         if env.storage().instance().has(&DataKey::Config) {
             return Err(Error::AlreadyInitialized);
         }
         if signers.len() != 3 || goal <= 0 {
+            return Err(Error::InvalidConfig);
+        }
+        // El admin debe ser uno de los firmantes legítimos de la campaña.
+        if !signers.contains(&admin) {
             return Err(Error::InvalidConfig);
         }
         env.storage().instance().set(
@@ -106,6 +117,12 @@ impl CampaignController {
         if Self::state(env.clone()) != State::Fundraising {
             return Err(Error::NotFundraising);
         }
+        // RT-04: no aceptar donaciones después del deadline. Si ya venció, la campaña
+        // solo puede ir a refund (todo-o-nada); aceptar aportes tardíos podría "rescatar"
+        // una campaña fallida y atrapar a los donantes previos.
+        if env.ledger().timestamp() > cfg.deadline {
+            return Err(Error::DeadlinePassed);
+        }
         token::Client::new(&env, &cfg.asset).transfer(
             &donor,
             &env.current_contract_address(),
@@ -124,6 +141,11 @@ impl CampaignController {
         let cfg = Self::config(&env)?;
         if Self::state(env.clone()) != State::Fundraising {
             return Err(Error::NotFundraising);
+        }
+        // RT-04: política de éxito = meta alcanzada ANTES (o en) del deadline. No se puede
+        // liberar a la causa fondos recaudados tarde.
+        if env.ledger().timestamp() > cfg.deadline {
+            return Err(Error::DeadlinePassed);
         }
         let raised = Self::raised(env.clone());
         if raised < cfg.goal {

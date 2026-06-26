@@ -36,7 +36,9 @@ fn setup(goal: i128, deadline: u64) -> Fixture<'static> {
     let signers = vec![&env, s_cause.clone(), s_platform.clone(), s_neutral.clone()];
 
     let client = CampaignControllerClient::new(&env, &env.register(CampaignController, ()));
-    client.init(&asset, &cause, &goal, &deadline, &signers);
+    // admin = plataforma (signers[1]), uno de los firmantes legítimos.
+    let admin = s_platform.clone();
+    client.init(&admin, &asset, &cause, &goal, &deadline, &signers);
 
     Fixture { env, client, token, token_admin, cause, signers }
 }
@@ -152,6 +154,71 @@ fn no_donate_after_release() {
 #[test]
 fn rejects_double_init() {
     let f = setup(100, 1_000_000);
-    let res = f.client.try_init(&f.token.address, &f.cause, &100, &1_000_000, &f.signers);
+    let admin = f.signers.get(1).unwrap();
+    let res = f.client.try_init(&admin, &f.token.address, &f.cause, &100, &1_000_000, &f.signers);
     assert_eq!(res, Err(Ok(Error::AlreadyInitialized)));
+}
+
+// RT-03: init exige require_auth del admin (probado vía auths registradas).
+#[test]
+fn init_requires_admin_auth() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let sac_admin = Address::generate(&env);
+    let sac = env.register_stellar_asset_contract_v2(sac_admin);
+    let cause = Address::generate(&env);
+    let s_cause = Address::generate(&env);
+    let s_platform = Address::generate(&env);
+    let s_neutral = Address::generate(&env);
+    let signers = vec![&env, s_cause.clone(), s_platform.clone(), s_neutral.clone()];
+
+    let client = CampaignControllerClient::new(&env, &env.register(CampaignController, ()));
+    client.init(&s_platform, &sac.address(), &cause, &100, &1_000_000, &signers);
+
+    // Se registró una autorización del admin para `init`.
+    let auths = env.auths();
+    assert!(auths.iter().any(|(addr, _)| *addr == s_platform));
+}
+
+// RT-03: el admin debe ser uno de los firmantes; si no, InvalidConfig.
+#[test]
+fn init_rejects_admin_not_signer() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let sac_admin = Address::generate(&env);
+    let sac = env.register_stellar_asset_contract_v2(sac_admin);
+    let cause = Address::generate(&env);
+    let signers = vec![
+        &env,
+        Address::generate(&env),
+        Address::generate(&env),
+        Address::generate(&env),
+    ];
+    let outsider = Address::generate(&env);
+
+    let client = CampaignControllerClient::new(&env, &env.register(CampaignController, ()));
+    let res = client.try_init(&outsider, &sac.address(), &cause, &100, &1_000_000, &signers);
+    assert_eq!(res, Err(Ok(Error::InvalidConfig)));
+}
+
+// RT-04: no se puede donar después del deadline.
+#[test]
+fn donate_rejected_after_deadline() {
+    let f = setup(1000, 100); // deadline temprano
+    let a = donor(&f, 100);
+    f.env.ledger().set_timestamp(200); // pasó el deadline
+    assert_eq!(f.client.try_donate(&a, &50), Err(Ok(Error::DeadlinePassed)));
+}
+
+// RT-04: no se puede liberar después del deadline (éxito = meta ANTES del deadline).
+#[test]
+fn release_rejected_after_deadline() {
+    let f = setup(100, 1000);
+    let a = donor(&f, 200);
+    f.client.donate(&a, &100); // meta alcanzada a tiempo
+    f.env.ledger().set_timestamp(2000); // pero el release llega tarde
+    let two = vec![&f.env, f.signers.get(0).unwrap(), f.signers.get(1).unwrap()];
+    assert_eq!(f.client.try_release(&two), Err(Ok(Error::DeadlinePassed)));
 }

@@ -41,23 +41,31 @@ export interface Position {
   underlying: string;
   apy: number;
 }
-export async function getPosition(campaignId: string, wallet: string): Promise<Position> {
-  return json(await fetch(`${BASE}/campaigns/${campaignId}/position?wallet=${encodeURIComponent(wallet)}`));
+// RT-05: /position exige prueba de titularidad (firma del challenge con la secret de la wallet).
+export async function getPosition(campaignId: string, wallet: string, sig: string): Promise<Position> {
+  const q = `wallet=${encodeURIComponent(wallet)}&sig=${encodeURIComponent(sig)}`;
+  return json(await fetch(`${BASE}/campaigns/${campaignId}/position?${q}`));
 }
 
-export async function approveMilestone(campaignId: string, milestoneId: string, approver: string) {
-  return json(await post(`/campaigns/${campaignId}/milestones/${milestoneId}/approve`, { approver }));
+// RT-01: las acciones approve/release/refund se autentican con FIRMAS Stellar reales.
+export interface SignedAction {
+  signer: string;
+  signature: string;
 }
 
-export async function release(campaignId: string, signers: string[]) {
+export async function approveMilestone(campaignId: string, milestoneId: string, signature: SignedAction) {
+  return json(await post(`/campaigns/${campaignId}/milestones/${milestoneId}/approve`, { signature }));
+}
+
+export async function release(campaignId: string, signatures: SignedAction[]) {
   return json<{ ok: boolean; state: string; txHash: string; capitalPlusYield: string }>(
-    await post(`/campaigns/${campaignId}/release`, { signers }),
+    await post(`/campaigns/${campaignId}/release`, { signatures }),
   );
 }
 
-export async function refund(campaignId: string, donorWallet: string) {
+export async function refund(campaignId: string, donorWallet: string, signature: SignedAction) {
   return json<{ ok: boolean; refundedTo: string; amount: string }>(
-    await post(`/campaigns/${campaignId}/refund`, { donorWallet }),
+    await post(`/campaigns/${campaignId}/refund`, { donorWallet, signature }),
   );
 }
 

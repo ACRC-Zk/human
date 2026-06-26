@@ -2,17 +2,20 @@
 // La PII/secret nunca sale del device. scope/nullScope/contentHash se derivan igual que
 // en @behuman/sdk (sha256 string→field, 2 bits altos en 0 → < r_bls12381).
 import * as snarkjs from "snarkjs";
+import * as StellarSdk from "@stellar/stellar-sdk";
 import type { SnarkProof } from "../kyc/bls";
 import type { StoredCredential } from "../kyc/credentialStore";
 
 const WASM = "/circuits-funding/funding_opinion.wasm";
 const ZKEY = "/circuits-funding/fo_final.zkey";
 
-// Deben coincidir con FUNDING_SCOPE_PREFIX / FUNDING_NULLSCOPE_PREFIX del SDK.
+// Deben coincidir EXACTAMENTE con los prefijos del SDK (@behuman/sdk fundingOpinion.ts).
 const SCOPE_PREFIX = "funding:";
 const NULLSCOPE_PREFIX = "funding-opinion:";
+const CONTENT_PREFIX = "funding-content:"; // RT-11: separación de dominio del contentHash.
 
-/** string → field element (< r_bls12381), idéntico a strToField del SDK. */
+/** string → field element (< r_bls12381), idéntico a strToField del SDK.
+ *  El masking de 2 bits altos (digest[0] &= 0x3f) es intencional: field < 2^254 < r. */
 async function strToField(s: string): Promise<string> {
   const enc = new TextEncoder().encode(s);
   const ab = new ArrayBuffer(enc.length);
@@ -26,7 +29,7 @@ async function strToField(s: string): Promise<string> {
 
 export const fundingScope = (campaignId: string) => strToField(SCOPE_PREFIX + campaignId);
 export const fundingNullScope = (campaignId: string) => strToField(NULLSCOPE_PREFIX + campaignId);
-export const contentHashField = (content: string) => strToField(content);
+export const contentHashField = (content: string) => strToField(CONTENT_PREFIX + content);
 
 export interface FundingOpinionProof {
   proof: SnarkProof;
@@ -56,4 +59,25 @@ export async function generateFundingOpinionProof(
 /** Handle público por campaña: últimos 5 chars del platformId (decimal → hex). */
 export function handleOfCampaign(platformIdDecimal: string): string {
   return ("0x" + BigInt(platformIdDecimal).toString(16).padStart(64, "0")).slice(-5);
+}
+
+// ─── RT-01/RT-05: autenticación criptográfica de acciones (firma Stellar) ──────
+// Debe coincidir EXACTAMENTE con fundingChallenge / signFundingAction de @behuman/sdk.
+export type FundingAction = "approve" | "release" | "refund";
+
+export function fundingChallenge(action: FundingAction, campaignId: string, bound: string): string {
+  return `behuman-funding:${action}:${campaignId}:${bound}`;
+}
+
+export interface SignedAction {
+  signer: string;
+  signature: string;
+}
+
+/** Firma un challenge con la secret de un firmante/wallet (S...) → {signer, signature}. */
+export function signFundingAction(secret: string, challenge: string): SignedAction {
+  const kp = StellarSdk.Keypair.fromSecret(secret);
+  const enc = new TextEncoder().encode(challenge);
+  const sig = kp.sign(Buffer.from(enc));
+  return { signer: kp.publicKey(), signature: sig.toString("base64") };
 }

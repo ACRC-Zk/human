@@ -154,6 +154,10 @@ export interface Campaign {
   escrowId?: string; // escrow de Trustless Work
   // Validadores del release 2-de-3 (causa + plataforma + neutral). Direcciones, no PII.
   signers: { cause: string; platform: string; neutral: string };
+  // ⚠️ SOLO DEV/DEMO: secrets de los firmantes para que el panel validador de la web pueda
+  // FIRMAR el challenge de approve/release (RT-01). En prod los secrets NUNCA tocan la API:
+  // los firmantes firman en sus propias wallets y el contrato on-chain exige require_auth.
+  signerSecretsDev?: { cause: string; platform: string; neutral: string };
   milestones: Milestone[];
   state: EscrowState;
   createdAt: number;
@@ -166,6 +170,8 @@ export interface Donation {
   amount: string;
   txHash: string;
   ts: number;
+  // RT-09: marca idempotente de reembolso (no se borra la donación → auditabilidad).
+  refunded?: boolean;
 }
 
 /** Posición del donante en el vault (shares = base del refund todo-o-nada). */

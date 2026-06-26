@@ -91,9 +91,15 @@ template FundingOpinion(LEVELS) {
     nf.inputs[1] <== nullScope;
     nullifier <== nf.out;
 
-    // 5) binding de contentHash.
-    signal contentHashSq;
-    contentHashSq <== contentHash * contentHash;
+    // 5) binding de contentHash:
+    //    RT-10: el binding NO depende de una restricción interna. `contentHash` es INPUT
+    //    PÚBLICO (ver `main {public [...contentHash]}`), así que Groth16 lo liga vía el vector
+    //    IC: alterar contentHash en los public signals hace `verify => false`. La API re-deriva
+    //    contentHash y lo compara en bindFundingOpinion + verifica la prueba, atando la opinión
+    //    a su contenido. Antes había `contentHashSq <== contentHash * contentHash` (restricción
+    //    MUERTA: su salida no se comparaba con nada) — eliminada por dar falsa sensación de
+    //    seguridad. Como `contentHash` está en `public`, sigue siendo señal pública del circuito.
+    // (sin restricción interna a propósito)
 }
 
 component main {public [scope, nullScope, contentHash]} = FundingOpinion(4);

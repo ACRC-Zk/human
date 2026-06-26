@@ -28,13 +28,18 @@ export function fundingCircuitsBuildDir(): string {
 }
 
 // Prefijos de dominio (deben coincidir con los usados por la API y el cliente).
+// RT-11: cada dominio (scope de identidad, scope de nullifier, contenido) lleva su propio
+// prefijo para que NUNCA colisionen en el mismo espacio de hash. El masking de 2 bits altos
+// (digest[0] &= 0x3f) es INTENCIONAL: garantiza el field < 2^254 < r_bls12381 con sesgo
+// despreciable (r no es potencia de 2, pero 2^254 << r). No usar sin prefijo de dominio.
 export const FUNDING_SCOPE_PREFIX = "funding:";
 export const FUNDING_NULLSCOPE_PREFIX = "funding-opinion:";
+export const FUNDING_CONTENT_PREFIX = "funding-content:";
 
 /** Mapea un string a un field element < r_bls12381 (sha256 con los 2 bits altos en 0). */
 export function strToField(s: string): string {
   const digest = createHash("sha256").update(s, "utf8").digest();
-  digest[0] &= 0x3f; // < 2^254 < r_bls12381
+  digest[0] &= 0x3f; // < 2^254 < r_bls12381 (masking intencional, ver nota arriba)
   return BigInt("0x" + digest.toString("hex")).toString();
 }
 
@@ -43,8 +48,13 @@ export const fundingScope = (campaignId: string): string => strToField(FUNDING_S
 /** scope del nullifier de campaña: "funding-opinion:"+campaignId → field. */
 export const fundingNullScope = (campaignId: string): string =>
   strToField(FUNDING_NULLSCOPE_PREFIX + campaignId);
-/** Hash del contenido de la opinión (binding público) → field. */
-export const contentHashField = (content: string): string => strToField(content);
+/**
+ * Hash del contenido de la opinión (binding público) → field.
+ * RT-11: con prefijo de dominio "funding-content:" para separación estricta (un `content`
+ * que casualmente fuera "funding:"+id ya NO colisiona con un scope). El SDK, la web
+ * (web/src/funding/zk3.ts) y la API deben derivarlo idéntico.
+ */
+export const contentHashField = (content: string): string => strToField(FUNDING_CONTENT_PREFIX + content);
 
 // Orden de los public signals e índices (acordado con el circuito).
 export const FUNDING_OPINION_SIGNALS_ORDER = [

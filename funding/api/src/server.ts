@@ -3,19 +3,34 @@
 // todo-o-nada). Donar/opinar gateado por personhood (Capa 1) sin revelar identidad.
 //
 // ⚠️ Cero PII on-chain/off-chain. Wallets de donación = seudónimos efímeros (no KYC).
-// Las reglas de release/refund las ENFORCEa on-chain el campaign_controller (Fase 3);
-// acá se reflejan para el flujo dev/testnet-API.
+//
+// AUTORIDAD ÚLTIMA = el contrato on-chain `campaign_controller` (ya implementado): exige
+// `require_auth` por firmante en release/donate y reglas de deadline/meta. Mientras no esté
+// desplegado, esta API REFLEJA esas reglas y ORQUESTA los providers. Por eso:
+//   - RT-01: approve/release/refund exigen FIRMA Stellar real sobre un challenge
+//     determinístico (no se aceptan direcciones públicas como credencial).
+//   - RT-04: deadline aplicado (donar/release solo antes del deadline; éxito = meta a tiempo).
+//   - RT-06: toda mutación del store es serializada (withStore) y el nullifier es atómico.
+//   - RT-07: handlers async envueltos; errores de providers → 502 controlado, sin crashear.
+//   - RT-08: el conteo anti-Sybil persiste aunque el curador no esté; moderación = solo visibilidad.
+//   - RT-09: refund devuelve EXACTAMENTE el principal y marca reembolsado (idempotente, no borra).
 import { randomUUID } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
-import express from "express";
+import express, { type NextFunction, type Request, type Response } from "express";
 import {
   contentHashField,
   createDefindex,
   createTrustlessWork,
+  fundingChallenge,
+  generateFundingKeypair,
   RELEASE_THRESHOLD,
+  signFundingAction,
+  validReleaseSigners,
+  verifyFundingSignature,
   type FundingProviderKind,
+  type SignedAction,
 } from "@behuman/sdk";
 import { reviewPost } from "@behuman/curation";
 import type {
@@ -27,7 +42,7 @@ import type {
   Milestone,
   Sentiment,
 } from "@behuman/shared";
-import { load, save } from "./store.js";
+import { claimNullifier, load, withStore } from "./store.js";
 import {
   verifyFundingOpinion,
   verifyMembership,
@@ -54,6 +69,21 @@ const tw = createTrustlessWork({
 const num = (s: string) => Number(s);
 const handleOf = (platformId: string) => platformId.slice(-5);
 
+/** Error con status HTTP para respuestas controladas. */
+class HttpError extends Error {
+  constructor(public status: number, public code: string) {
+    super(code);
+  }
+}
+const bad = (status: number, code: string): never => {
+  throw new HttpError(status, code);
+};
+
+/** Wrapper de handlers async: cualquier rechazo va al middleware de error (RT-07). */
+type AsyncHandler = (req: Request, res: Response) => Promise<unknown>;
+const wrap = (h: AsyncHandler) => (req: Request, res: Response, next: NextFunction) =>
+  Promise.resolve(h(req, res)).catch(next);
+
 /** Posición simulada (dev): underlying = principal * (1 + apy * añosTranscurridos). */
 function position(campaign: Campaign, donations: Donation[], wallet: string, apy: number) {
   const mine = donations.filter((d) => d.campaignId === campaign.id && d.donorWallet === wallet);
@@ -76,61 +106,88 @@ app.use((req, res, next) => {
 app.get("/health", (_req, res) => res.json({ ok: true, provider, asset: ASSET }));
 
 // ─── Campañas (setup por la plataforma) ───────────────────────────────────────
-app.post("/campaigns", async (req, res) => {
-  const b = req.body ?? {};
-  if (!b.title || !b.goalAmount || !b.causeWallet || !b.signers?.platform) {
-    return res.status(400).json({ error: "missing_fields" });
-  }
-  const id = randomUUID();
-  const milestones: Milestone[] = (b.milestones ?? []).map((m: { title: string; description?: string }) => ({
-    id: randomUUID(),
-    title: m.title,
-    description: m.description,
-    status: "pending" as const,
-  }));
-  const signers = {
-    cause: String(b.signers.cause ?? b.causeWallet),
-    platform: String(b.signers.platform),
-    neutral: String(b.signers.neutral ?? process.env.FUNDING_NEUTRAL_ADDRESS ?? ""),
-  };
+app.post(
+  "/campaigns",
+  wrap(async (req, res) => {
+    const b = req.body ?? {};
+    // En prod se exige `signers.platform` (address externa). En dev basta con que la API
+    // genere/derive los keypairs (signerSecretsDev opcional) — ver bloque de firmantes abajo.
+    const hasSigner = provider === "dev" ? true : Boolean(b.signers?.platform);
+    if (!b.title || !b.goalAmount || !b.causeWallet || !hasSigner) {
+      return bad(400, "missing_fields");
+    }
+    const id = randomUUID();
+    const milestones: Milestone[] = (b.milestones ?? []).map(
+      (m: { title: string; description?: string }) => ({
+        id: randomUUID(),
+        title: m.title,
+        description: m.description,
+        status: "pending" as const,
+      }),
+    );
+    // RT-01: en dev/demo generamos KEYPAIRS REALES para los firmantes (a menos que el caller
+    // los provea), para que el panel validador pueda FIRMAR el challenge y la API verifique la
+    // firma. En prod los firmantes son externos (sus propias wallets) y se pasan solo addresses.
+    let signerSecretsDev: { cause: string; platform: string; neutral: string } | undefined;
+    let signers: { cause: string; platform: string; neutral: string };
+    if (provider === "dev") {
+      const provided = b.signerSecretsDev as
+        | { cause?: string; platform?: string; neutral?: string }
+        | undefined;
+      const cause = provided?.cause ?? generateFundingKeypair().secret;
+      const platform = provided?.platform ?? generateFundingKeypair().secret;
+      const neutral = provided?.neutral ?? generateFundingKeypair().secret;
+      signerSecretsDev = { cause, platform, neutral };
+      // Derivar pubkeys de los secrets para que coincidan con las firmas verificadas.
+      const addrOf = (sec: string) => signFundingAction(sec, "x").signer;
+      signers = { cause: addrOf(cause), platform: addrOf(platform), neutral: addrOf(neutral) };
+    } else {
+      signers = {
+        cause: String(b.signers.cause ?? b.causeWallet),
+        platform: String(b.signers.platform),
+        neutral: String(b.signers.neutral ?? process.env.FUNDING_NEUTRAL_ADDRESS ?? ""),
+      };
+    }
 
-  // Deploy del escrow (Trustless Work) — workflow/disputa; el dinero vive en el vault.
-  const escrow = await tw.deployEscrow({
-    asset: ASSET,
-    amount: String(b.goalAmount),
-    roles: {
-      serviceProvider: signers.cause,
-      approver: signers.platform,
-      receiver: String(b.causeWallet),
-      disputeResolver: signers.neutral,
-      platformAddress: signers.platform,
-      releaseSigners: [signers.cause, signers.platform, signers.neutral],
-    },
-    milestones: milestones.map((m) => ({ id: m.id, title: m.title })),
-  });
+    // Deploy del escrow (Trustless Work). Si el provider externo falla → 502 controlado.
+    const escrow = await tw.deployEscrow({
+      asset: ASSET,
+      amount: String(b.goalAmount),
+      roles: {
+        serviceProvider: signers.cause,
+        approver: signers.platform,
+        receiver: String(b.causeWallet),
+        disputeResolver: signers.neutral,
+        platformAddress: signers.platform,
+        releaseSigners: [signers.cause, signers.platform, signers.neutral],
+      },
+      milestones: milestones.map((m) => ({ id: m.id, title: m.title })),
+    });
 
-  const campaign: Campaign = {
-    id,
-    title: String(b.title),
-    summary: String(b.summary ?? ""),
-    asset: ASSET,
-    goalAmount: String(b.goalAmount),
-    raisedAmount: "0",
-    deadline: Number(b.deadline ?? Date.now() + 30 * 24 * 3600 * 1000),
-    causeWallet: String(b.causeWallet),
-    vaultAddress: provider === "dev" ? "vault_dev_" + id.slice(0, 8) : String(b.vaultAddress ?? ""),
-    controllerAddress: b.controllerAddress ? String(b.controllerAddress) : undefined,
-    escrowId: escrow.escrowId,
-    signers,
-    milestones,
-    state: "fundraising",
-    createdAt: Date.now(),
-  };
-  const s = load();
-  s.campaigns.push(campaign);
-  save(s);
-  res.json(campaign);
-});
+    const campaign: Campaign = {
+      id,
+      title: String(b.title),
+      summary: String(b.summary ?? ""),
+      asset: ASSET,
+      goalAmount: String(b.goalAmount),
+      raisedAmount: "0",
+      deadline: Number(b.deadline ?? Date.now() + 30 * 24 * 3600 * 1000),
+      causeWallet: String(b.causeWallet),
+      vaultAddress: provider === "dev" ? "vault_dev_" + id.slice(0, 8) : String(b.vaultAddress ?? ""),
+      controllerAddress: b.controllerAddress ? String(b.controllerAddress) : undefined,
+      escrowId: escrow.escrowId,
+      signers,
+      signerSecretsDev, // ⚠️ solo presente en dev/demo (undefined en prod)
+      milestones,
+      state: "fundraising",
+      createdAt: Date.now(),
+    };
+    await withStore((s) => {
+      s.campaigns.push(campaign);
+    });
+    res.json(campaign);
+  }),
+);
 
 app.get("/campaigns", (_req, res) => res.json(load().campaigns));
 app.get("/campaigns/:id", (req, res) => {
@@ -139,186 +196,273 @@ app.get("/campaigns/:id", (req, res) => {
 });
 
 // ─── Donación anónima (gateada por personhood) ────────────────────────────────
-app.post("/campaigns/:id/donate", async (req, res) => {
-  const s = load();
-  const c = s.campaigns.find((x) => x.id === req.params.id);
-  if (!c) return res.status(404).json({ error: "not_found" });
-  if (c.state !== "fundraising") return res.status(409).json({ error: "not_fundraising" });
+app.post(
+  "/campaigns/:id/donate",
+  wrap(async (req, res) => {
+    const snapshot = load().campaigns.find((x) => x.id === req.params.id);
+    if (!snapshot) return bad(404, "not_found");
+    if (snapshot.state !== "fundraising") return bad(409, "not_fundraising");
+    // RT-04: no aceptar donaciones después del deadline (paridad con el contrato).
+    if (Date.now() > snapshot.deadline) return bad(409, "deadline_passed");
 
-  const membership = req.body?.membershipProof as MembershipProof | undefined;
-  const donorWallet = String(req.body?.donorWallet ?? "");
-  const amount = String(req.body?.amount ?? "");
-  if (!donorWallet || !amount || num(amount) <= 0) return res.status(400).json({ error: "bad_amount" });
+    const membership = req.body?.membershipProof as MembershipProof | undefined;
+    const donorWallet = String(req.body?.donorWallet ?? "");
+    const amount = String(req.body?.amount ?? "");
+    if (!donorWallet || !amount || num(amount) <= 0) return bad(400, "bad_amount");
 
-  if (!(await verifyMembership(membership))) {
-    return res.status(403).json({ error: "not_verified_human" });
-  }
+    if (!(await verifyMembership(membership))) return bad(403, "not_verified_human");
 
-  // Arma la tx de depósito (real: XDR a firmar por la wallet anónima; dev: marcador).
-  const { xdr } = await defindex.buildDeposit(c.vaultAddress!, donorWallet, amount);
+    // Arma la tx de depósito (real: XDR a firmar por la wallet anónima; dev: marcador).
+    const { xdr } = await defindex.buildDeposit(snapshot.vaultAddress!, donorWallet, amount);
 
-  // En dev finalizamos directo (sin firma real). En real, el cliente firma y confirma.
-  const donation: Donation = {
-    campaignId: c.id,
-    donorWallet,
-    amount,
-    txHash: provider === "dev" ? (await defindex.send(xdr)).hash : "",
-    ts: Date.now(),
-  };
-  if (provider === "dev") {
-    s.donations.push(donation);
-    c.raisedAmount = (num(c.raisedAmount) + num(amount)).toString();
-    save(s);
-    return res.json({ ok: true, donation, raisedAmount: c.raisedAmount });
-  }
-  // real: devolver XDR para firmar; el cliente llama /donate/confirm
-  res.json({ ok: true, xdr });
-});
+    if (provider !== "dev") {
+      // real: el cliente firma el XDR y confirma vía /donate/confirm (no se contabiliza acá).
+      return res.json({ ok: true, xdr });
+    }
 
-app.get("/campaigns/:id/position", async (req, res) => {
-  const s = load();
-  const c = s.campaigns.find((x) => x.id === req.params.id);
-  if (!c) return res.status(404).json({ error: "not_found" });
-  const apy = await defindex.apy(c.vaultAddress!);
-  res.json(position(c, s.donations, String(req.query.wallet ?? ""), apy));
-});
+    // dev: finalizamos directo. La contabilidad se hace bajo lock (RT-06).
+    const txHash = (await defindex.send(xdr)).hash;
+    const out = await withStore((s) => {
+      const c = s.campaigns.find((x) => x.id === snapshot.id);
+      if (!c) return bad(404, "not_found");
+      if (c.state !== "fundraising") return bad(409, "not_fundraising");
+      if (Date.now() > c.deadline) return bad(409, "deadline_passed");
+      const donation: Donation = { campaignId: c.id, donorWallet, amount, txHash, ts: Date.now() };
+      s.donations.push(donation);
+      c.raisedAmount = (num(c.raisedAmount) + num(amount)).toString();
+      return { donation, raisedAmount: c.raisedAmount };
+    });
+    res.json({ ok: true, ...out });
+  }),
+);
+
+// RT-05: el monto donado es público por diseño (MVP), pero NO se expone por wallet arbitraria
+// sin demostrar titularidad. El titular firma un challenge con la secret de su wallet efímera.
+app.get(
+  "/campaigns/:id/position",
+  wrap(async (req, res) => {
+    const s = load();
+    const c = s.campaigns.find((x) => x.id === req.params.id);
+    if (!c) return bad(404, "not_found");
+    const wallet = String(req.query.wallet ?? "");
+    if (!wallet) return bad(400, "missing_wallet");
+    // Prueba de titularidad: firma del challenge "position:<id>:<wallet>" con la secret.
+    const challenge = fundingChallenge("refund", c.id, `position:${wallet}`);
+    const sig = String(req.query.sig ?? "");
+    if (!verifyFundingSignature({ signer: wallet, signature: sig }, challenge)) {
+      return bad(403, "ownership_proof_required");
+    }
+    const apy = await defindex.apy(c.vaultAddress!);
+    res.json(position(c, s.donations, wallet, apy));
+  }),
+);
 
 // ─── Hitos (causa reporta; plataforma aprueba) ────────────────────────────────
-app.post("/campaigns/:id/milestones/:mid/approve", async (req, res) => {
-  const s = load();
-  const c = s.campaigns.find((x) => x.id === req.params.id);
-  if (!c) return res.status(404).json({ error: "not_found" });
-  const m = c.milestones.find((x) => x.id === req.params.mid);
-  if (!m) return res.status(404).json({ error: "milestone_not_found" });
-  const approver = String(req.body?.approver ?? "");
-  if (approver !== c.signers.platform) return res.status(403).json({ error: "approver_must_be_platform" });
-  await tw.approveMilestone(c.escrowId!, m.id, approver);
-  m.status = "approved";
-  save(s);
-  res.json(m);
-});
+// RT-01: la aprobación exige FIRMA de la plataforma sobre el challenge de la acción.
+app.post(
+  "/campaigns/:id/milestones/:mid/approve",
+  wrap(async (req, res) => {
+    const snapshot = load().campaigns.find((x) => x.id === req.params.id);
+    if (!snapshot) return bad(404, "not_found");
+    const m0 = snapshot.milestones.find((x) => x.id === req.params.mid);
+    if (!m0) return bad(404, "milestone_not_found");
+
+    const challenge = fundingChallenge("approve", snapshot.id, req.params.mid);
+    const signature = req.body?.signature as SignedAction | undefined;
+    // Solo la plataforma puede aprobar, y debe FIRMARLO (no basta enviar su address).
+    if (signature?.signer !== snapshot.signers.platform) return bad(403, "approver_must_be_platform");
+    if (!verifyFundingSignature(signature, challenge)) return bad(403, "invalid_signature");
+
+    await tw.approveMilestone(snapshot.escrowId!, m0.id, signature.signer);
+    const m = await withStore((s) => {
+      const c = s.campaigns.find((x) => x.id === snapshot.id);
+      const mm = c?.milestones.find((x) => x.id === req.params.mid);
+      if (!mm) return bad(404, "milestone_not_found");
+      mm.status = "approved";
+      return mm;
+    });
+    res.json(m);
+  }),
+);
 
 // ─── Release (2-de-3 + meta + hitos) → causa recibe capital + yield ────────────
-app.post("/campaigns/:id/release", async (req, res) => {
-  const s = load();
-  const c = s.campaigns.find((x) => x.id === req.params.id);
-  if (!c) return res.status(404).json({ error: "not_found" });
-  if (c.state !== "fundraising") return res.status(409).json({ error: "not_fundraising" });
+// RT-01: cada firmante envía una FIRMA del challenge "release:<id>:<raised>"; se verifica
+// criptográficamente. No se aceptan direcciones públicas como credencial.
+app.post(
+  "/campaigns/:id/release",
+  wrap(async (req, res) => {
+    const snapshot = load().campaigns.find((x) => x.id === req.params.id);
+    if (!snapshot) return bad(404, "not_found");
+    if (snapshot.state !== "fundraising") return bad(409, "not_fundraising");
+    // RT-04: éxito = meta alcanzada ANTES del deadline.
+    if (Date.now() > snapshot.deadline) return bad(409, "deadline_passed");
+    if (!snapshot.milestones.every((m) => m.status === "approved")) {
+      return bad(409, "milestones_not_approved");
+    }
+    if (num(snapshot.raisedAmount) < num(snapshot.goalAmount)) return bad(409, "goal_not_reached");
 
-  const valid = new Set([c.signers.cause, c.signers.platform, c.signers.neutral]);
-  const signers = [...new Set((req.body?.signers ?? []).map(String))].filter((x) => valid.has(x as string));
-  if (signers.length < RELEASE_THRESHOLD) return res.status(403).json({ error: "need_2_of_3_signers" });
-  if (!c.milestones.every((m) => m.status === "approved")) {
-    return res.status(409).json({ error: "milestones_not_approved" });
-  }
-  if (num(c.raisedAmount) < num(c.goalAmount)) return res.status(409).json({ error: "goal_not_reached" });
+    const authorized = [snapshot.signers.cause, snapshot.signers.platform, snapshot.signers.neutral];
+    const challenge = fundingChallenge("release", snapshot.id, snapshot.raisedAmount);
+    const signatures = req.body?.signatures as SignedAction[] | undefined;
+    const valid = validReleaseSigners(signatures, authorized, challenge);
+    if (valid.length < RELEASE_THRESHOLD) return bad(403, "need_2_of_3_valid_signatures");
 
-  // release on-chain (workflow) + withdraw de Blend hacia la causa (capital + yield).
-  const { hash } = await tw.releaseFunds(c.escrowId!, signers as string[]);
-  await defindex.buildWithdraw(c.vaultAddress!, c.controllerAddress ?? c.signers.platform, c.raisedAmount);
-  const apy = await defindex.apy(c.vaultAddress!);
-  const total = position(c, s.donations, "__all__", apy); // underlying total ~ aproximado
-  c.state = "released";
-  save(s);
-  res.json({ ok: true, state: c.state, txHash: hash, releasedTo: c.causeWallet, capitalPlusYield: c.raisedAmount, apy });
-  void total;
-});
+    // release on-chain (workflow) + withdraw de Blend hacia la causa (capital + yield).
+    const { hash } = await tw.releaseFunds(snapshot.escrowId!, valid);
+    await defindex.buildWithdraw(
+      snapshot.vaultAddress!,
+      snapshot.controllerAddress ?? snapshot.signers.platform,
+      snapshot.raisedAmount,
+    );
+    const apy = await defindex.apy(snapshot.vaultAddress!);
+    const out = await withStore((s) => {
+      const c = s.campaigns.find((x) => x.id === snapshot.id);
+      if (!c) return bad(404, "not_found");
+      if (c.state !== "fundraising") return bad(409, "not_fundraising");
+      c.state = "released";
+      return { state: c.state, releasedTo: c.causeWallet, capitalPlusYield: c.raisedAmount };
+    });
+    res.json({ ok: true, txHash: hash, apy, ...out });
+  }),
+);
 
-// ─── Refund todo-o-nada (deadline sin meta, o disputa a favor de donantes) ─────
-app.post("/campaigns/:id/refund", async (req, res) => {
-  const s = load();
-  const c = s.campaigns.find((x) => x.id === req.params.id);
-  if (!c) return res.status(404).json({ error: "not_found" });
-  const donorWallet = String(req.body?.donorWallet ?? "");
-  if (!donorWallet) return res.status(400).json({ error: "missing_donorWallet" });
+// ─── Refund todo-o-nada (deadline sin meta) ───────────────────────────────────
+// RT-01: el donante prueba titularidad de su wallet firmando el challenge.
+// RT-09: devuelve EXACTAMENTE el principal; marca reembolsado (idempotente), no borra.
+app.post(
+  "/campaigns/:id/refund",
+  wrap(async (req, res) => {
+    const snapshot = load().campaigns.find((x) => x.id === req.params.id);
+    if (!snapshot) return bad(404, "not_found");
+    const donorWallet = String(req.body?.donorWallet ?? "");
+    if (!donorWallet) return bad(400, "missing_donorWallet");
 
-  const failed = (Date.now() > c.deadline && num(c.raisedAmount) < num(c.goalAmount)) || c.state === "disputed";
-  if (c.state === "released") return res.status(409).json({ error: "already_released" });
-  if (!failed && c.state !== "refunding") return res.status(409).json({ error: "campaign_not_failed" });
-  c.state = "refunding";
+    // Prueba de titularidad de la wallet (firma del challenge de refund).
+    const challenge = fundingChallenge("refund", snapshot.id, donorWallet);
+    const signature = req.body?.signature as SignedAction | undefined;
+    if (signature?.signer !== donorWallet) return bad(403, "ownership_proof_required");
+    if (!verifyFundingSignature(signature, challenge)) return bad(403, "invalid_signature");
 
-  const apy = await defindex.apy(c.vaultAddress!);
-  const pos = position(c, s.donations, donorWallet, apy); // principal + yield del donante
-  if (num(pos.shares) <= 0) return res.status(404).json({ error: "no_position" });
-  await defindex.buildWithdraw(c.vaultAddress!, donorWallet, pos.shares);
-  // marca las donaciones de esa wallet como reembolsadas (saca del cómputo)
-  s.donations = s.donations.filter((d) => !(d.campaignId === c.id && d.donorWallet === donorWallet));
-  save(s);
-  res.json({ ok: true, refundedTo: donorWallet, amount: pos.underlying });
-});
+    // RT-09: falló = deadline vencido sin meta. NO se usa `disputed` como atajo sin verificación.
+    const failed = Date.now() > snapshot.deadline && num(snapshot.raisedAmount) < num(snapshot.goalAmount);
+    if (snapshot.state === "released") return bad(409, "already_released");
+    if (!failed && snapshot.state !== "refunding") return bad(409, "campaign_not_failed");
+
+    // RT-09: el refund devuelve el PRINCIPAL (paridad con el contrato), no principal+yield.
+    const principal = load()
+      .donations.filter(
+        (d) => d.campaignId === snapshot.id && d.donorWallet === donorWallet && !d.refunded,
+      )
+      .reduce((a, d) => a + num(d.amount), 0);
+    if (principal <= 0) return bad(404, "no_position");
+    await defindex.buildWithdraw(snapshot.vaultAddress!, donorWallet, principal.toString());
+
+    const out = await withStore((s) => {
+      const c = s.campaigns.find((x) => x.id === snapshot.id);
+      if (!c) return bad(404, "not_found");
+      if (c.state === "released") return bad(409, "already_released");
+      if (c.state === "fundraising") c.state = "refunding";
+      // RT-09: marcar reembolsado de forma idempotente (no borrar) y descontar de raised.
+      let refundedNow = 0;
+      for (const d of s.donations) {
+        if (d.campaignId === c.id && d.donorWallet === donorWallet && !d.refunded) {
+          d.refunded = true;
+          refundedNow += num(d.amount);
+        }
+      }
+      if (refundedNow > 0) c.raisedAmount = Math.max(0, num(c.raisedAmount) - refundedNow).toString();
+      return { refundedTo: donorWallet, amount: refundedNow.toString() };
+    });
+    res.json({ ok: true, ...out });
+  }),
+);
 
 // ─── Opiniones anónimas por campaña (Capa 2 scopeada; nullifier por campaña) ───
 // Prueba ZK de funding (publicSignals): [issuerRoot, platformId, nullifier, scope, nullScope, contentHash].
-// platformId/nullifier salen DE la prueba (atados a esta campaña + contenido), no del body.
-app.post("/campaigns/:id/opinions", async (req, res) => {
-  const s = load();
-  const c = s.campaigns.find((x) => x.id === req.params.id);
-  if (!c) return res.status(404).json({ error: "not_found" });
+// RT-02: platformId/nullifier salen SOLO de la prueba verificada (no del body).
+app.post(
+  "/campaigns/:id/opinions",
+  wrap(async (req, res) => {
+    const c = load().campaigns.find((x) => x.id === req.params.id);
+    if (!c) return bad(404, "not_found");
 
-  const content = String(req.body?.content ?? "").trim().slice(0, 560);
-  if (!content) return res.status(400).json({ error: "missing_fields" });
-  const sentiment = (["support", "oppose", "neutral"].includes(req.body?.sentiment) ? req.body.sentiment : "neutral") as Sentiment;
-  const txHash = String(req.body?.txHash ?? "");
+    const content = String(req.body?.content ?? "").trim().slice(0, 560);
+    if (!content) return bad(400, "missing_fields");
+    const sentiment = (["support", "oppose", "neutral"].includes(req.body?.sentiment)
+      ? req.body.sentiment
+      : "neutral") as Sentiment;
+    const txHash = String(req.body?.txHash ?? "");
 
-  // Verifica la prueba de opinión por campaña → claims de confianza (o null si inválida).
-  const opinionProof = req.body?.opinionProof as FundingOpinionProofInput | undefined;
-  const claims = await verifyFundingOpinion(c.id, content, opinionProof, {
-    platformId: req.body?.platformId,
-    nullifier: req.body?.nullifier,
-  });
-  if (!claims) return res.status(403).json({ error: "invalid_opinion_proof" });
-  const { platformId, nullifier } = claims;
-  const contentHash = contentHashField(content); // derivado server-side (atado a la prueba)
+    // RT-02: exige prueba válida; claims derivados SOLO de la prueba verificada.
+    const opinionProof = req.body?.opinionProof as FundingOpinionProofInput | undefined;
+    const claims = await verifyFundingOpinion(c.id, content, opinionProof);
+    if (!claims) return bad(403, "invalid_opinion_proof");
+    const { platformId, nullifier } = claims;
+    const contentHash = contentHashField(content); // derivado server-side (atado a la prueba)
 
-  // Anti-Sybil por campaña: 1 humano = 1 voz (nullifier scopeado a la campaña).
-  const nkey = `${c.id}:${nullifier}`;
-  const reused = s.nullifiers[nkey];
+    // RT-08: la curaduría solo determina VISIBILIDAD. El conteo/registro (nullifier +
+    // sentimiento) persiste INDEPENDIENTEMENTE de la disponibilidad del curador. Si el curador
+    // no está, la opinión queda pendiente de revisión (oculta del feed) pero su sentimiento YA
+    // fue contado de forma anti-Sybil — no hay descarte silencioso ni censura por DoS.
+    let curation: CurationVerdict;
+    try {
+      curation = await reviewPost({ platformId, handle: handleOf(platformId), content });
+    } catch {
+      curation = { status: "escalated", reason: "Curador no disponible; pendiente de revisión humana." };
+    }
 
-  // Curaduría (Nivel 1) — solo contenido + seudónimo; fail-safe -> escalar.
-  let curation: CurationVerdict;
-  try {
-    curation = await reviewPost({ platformId, handle: handleOf(platformId), content });
-  } catch {
-    curation = { status: "escalated", reason: "Curador no disponible; revisión humana." };
-  }
+    // RT-06: claim del nullifier + push de la opinión, todo bajo el mismo lock y atómico.
+    const out = await withStore((s) => {
+      const nkey = `${c.id}:${nullifier}`;
+      const firstVoice = claimNullifier(s, nkey); // atómico: true si es la 1ª vez
+      const opinion: CampaignOpinion = {
+        id: randomUUID(),
+        campaignId: c.id,
+        platformId,
+        handle: handleOf(platformId),
+        content,
+        contentHash,
+        // 1 humano = 1 voz por campaña: solo la 1ª opinión cuenta su sentimiento.
+        sentiment: firstVoice ? sentiment : "neutral",
+        txHash,
+        curation,
+        ts: Date.now(),
+      };
+      s.opinions.push(opinion);
+      return { opinion, firstVoice };
+    });
+    if (!out.firstVoice) {
+      return res.json({ ...out.opinion, note: "sentiment_already_counted_for_campaign" });
+    }
+    res.json(out.opinion);
+  }),
+);
 
-  const opinion: CampaignOpinion = {
-    id: randomUUID(),
-    campaignId: c.id,
-    platformId,
-    handle: handleOf(platformId),
-    content,
-    contentHash,
-    sentiment,
-    txHash,
-    curation,
-    ts: Date.now(),
-  };
-
-  if (reused) {
-    // Ya tiene voz en esta campaña: puede publicar texto adicional, pero su SENTIMIENTO no
-    // se vuelve a contar (no infla el sentimiento). Se marca como tal.
-    opinion.sentiment = "neutral";
-    s.opinions.push(opinion);
-    save(s);
-    return res.json({ ...opinion, note: "sentiment_already_counted_for_campaign" });
-  }
-
-  s.nullifiers[nkey] = true;
-  s.opinions.push(opinion);
-  save(s);
-  res.json(opinion);
-});
-
+// RT-08: el conteo de sentimiento NO depende de la visibilidad. `counted` incluye toda opinión
+// con voz (1ª por nullifier), esté o no aprobada por el curador. `visible` (feed) sí filtra las
+// que están pendientes de revisión, pero eso no altera el conteo anti-Sybil ni lo censura.
 app.get("/campaigns/:id/opinions", (req, res) => {
   const s = load();
-  const list = s.opinions.filter((o) => o.campaignId === req.params.id && o.curation?.status !== "escalated");
-  const counted = list.filter((o) => o.sentiment !== "neutral");
+  const all = s.opinions.filter((o) => o.campaignId === req.params.id);
+  const visible = all.filter((o) => o.curation?.status !== "escalated");
+  const counted = all.filter((o) => o.sentiment !== "neutral");
   const sentiment = {
     support: counted.filter((o) => o.sentiment === "support").length,
     oppose: counted.filter((o) => o.sentiment === "oppose").length,
   };
-  res.json({ opinions: [...list].reverse(), sentiment });
+  res.json({ opinions: [...visible].reverse(), sentiment });
+});
+
+// ─── Middleware de error (RT-07): nada queda sin respuesta; providers → 502 ─────
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  if (err instanceof HttpError) return res.status(err.status).json({ error: err.code });
+  const msg = err instanceof Error ? err.message : String(err);
+  // Fallos de providers externos (DeFindex/Trustless Work) → 502 controlado.
+  if (/trustlesswork|defindex|HTTP \d+/i.test(msg)) {
+    return res.status(502).json({ error: "provider_unavailable", detail: msg });
+  }
+  console.error("unhandled error:", msg);
+  res.status(500).json({ error: "internal_error" });
 });
 
 const port = Number(process.env.FUNDING_API_PORT ?? 8789);

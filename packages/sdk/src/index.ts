@@ -15,6 +15,7 @@ export * from "./blsEncode.js";
 export * from "./defindex.js";
 export * from "./trustlesswork.js";
 export * from "./fundingOpinion.js";
+export * from "./fundingAuth.js";
 
 const { Address, Contract, TransactionBuilder, Keypair, BASE_FEE, xdr, rpc, scValToNative } =
   StellarSdk;

@@ -17,8 +17,6 @@ const PLATFORM_VK = resolve(here, "..", "..", "..", "platform", "circuits", "bui
 // VK del circuito de OPINIÓN POR CAMPAÑA (Capa 3) — scope/nullifier por campaña.
 const FUNDING_VK = resolve(here, "..", "..", "..", "funding", "circuits", "build", "verification_key.json");
 
-const isDev = () => (process.env.FUNDING_PROVIDER ?? "dev") === "dev";
-
 export interface MembershipProof {
   proof: unknown;
   publicSignals: string[]; // [issuerRoot, platformId, ...]
@@ -29,12 +27,20 @@ export interface FundingOpinionProofInput {
   publicSignals: string[]; // [issuerRoot, platformId, nullifier, scope, nullScope, contentHash]
 }
 
-/** Verifica que el solicitante es un humano verificado (sin revelar quién). */
+/**
+ * Verifica que el solicitante es un humano verificado (sin revelar quién).
+ *
+ * RT-02/RT-05: la prueba de pertenencia se verifica criptográficamente en CUALQUIER modo
+ * (la web genera pruebas reales). Ya NO se acepta una membership "declarada" sin prueba.
+ *
+ * Limitación documentada (RT-05): el circuito de plataforma NO ata la prueba a la
+ * `donorWallet` (sería un cambio del circuito trusteado, fuera de alcance). Por eso una
+ * prueba de membership válida solo demuestra "existe ≥1 humano verificado", no unicidad por
+ * wallet. Mitigación a nivel API/web: wallet efímera POR donación (no por sesión) y
+ * /position no expone montos por wallet arbitraria (ver server.ts).
+ */
 export async function verifyMembership(mp?: MembershipProof): Promise<boolean> {
   if (!mp || !Array.isArray(mp.publicSignals) || mp.publicSignals.length === 0) return false;
-  // dev: se acepta la membership declarada (mock para construir/testear el flujo).
-  if (isDev()) return true;
-  // real: verificación criptográfica de la prueba de pertenencia con snarkjs.
   if (!existsSync(PLATFORM_VK)) return false;
   try {
     const vk = JSON.parse(readFileSync(PLATFORM_VK, "utf8"));
@@ -49,31 +55,26 @@ export async function verifyMembership(mp?: MembershipProof): Promise<boolean> {
  * (issuerRoot/platformId/nullifier vienen DE la prueba, atados a esta campaña y contenido).
  * Devuelve `null` si la prueba es inválida o no corresponde a la campaña/contenido.
  *
- * En dev (sin prover en el cliente) se aceptan los valores declarados por el caller
- * como fallback, para poder construir/testear el flujo end-to-end.
+ * RT-02: NO existe fallback "declared". En CUALQUIER modo (dev o real) se EXIGE una
+ * `opinionProof` válida; platformId/nullifier salen SOLO de la prueba verificada. La web ya
+ * genera pruebas reales con el circuito compilado, así que dev sigue funcionando.
  */
 export async function verifyFundingOpinion(
   campaignId: string,
   content: string,
   op: FundingOpinionProofInput | undefined,
-  declared?: { platformId?: string; nullifier?: string },
 ): Promise<FundingOpinionClaims | null> {
-  // Camino real: prueba criptográfica + binding a la campaña/contenido.
-  if (op?.proof && Array.isArray(op.publicSignals)) {
-    const claims = bindFundingOpinion(op.publicSignals, campaignId, content);
-    if (!claims) return null; // scope/nullScope/contentHash no corresponden
-    if (existsSync(FUNDING_VK)) {
-      const vk = JSON.parse(readFileSync(FUNDING_VK, "utf8"));
-      const ok = await verifyFundingOpinionProof(op as never, vk);
-      if (!ok) return null;
-      return claims;
-    }
-    // VK ausente: solo aceptable en dev.
-    return isDev() ? claims : null;
+  if (!op?.proof || !Array.isArray(op.publicSignals)) return null;
+  // Binding: scope/nullScope/contentHash de la prueba deben corresponder a campaña + contenido.
+  const claims = bindFundingOpinion(op.publicSignals, campaignId, content);
+  if (!claims) return null;
+  // Verificación criptográfica de la prueba (obligatoria). Sin VK no se puede confiar.
+  if (!existsSync(FUNDING_VK)) return null;
+  try {
+    const vk = JSON.parse(readFileSync(FUNDING_VK, "utf8"));
+    const ok = await verifyFundingOpinionProof(op as never, vk);
+    return ok ? claims : null;
+  } catch {
+    return null;
   }
-  // Fallback dev: sin prueba, se aceptan los valores declarados (mock).
-  if (isDev() && declared?.platformId && declared?.nullifier) {
-    return { issuerRoot: "", platformId: declared.platformId, nullifier: declared.nullifier };
-  }
-  return null;
 }
