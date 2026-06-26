@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "identity/contracts/kyc_verifier",
     "platform/contracts/opinion_board",
+    "funding/contracts/campaign_controller",
 ]
 
 [workspace.dependencies]
