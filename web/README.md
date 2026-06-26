@@ -1,9 +1,9 @@
 # web · Frontend (React + Vite + TypeScript)
 
-La app de beHuman. Landing + flujo de verificación (en progreso). Consume `@behuman/sdk`.
+La app de beHuman: **landing** (onboarding del producto) + **flujos en vivo** de Capa 1 y Capa 2.
 
-> 📐 Diseño: inspiración [zk.me](https://www.zk.me/) — ver **`web/docs/DESIGN.md`**
-> 📐 Flujo KYC en vault: `Flujo de KYC`
+> 📐 Diseño landing: inspiración [zk.me](https://www.zk.me/) — ver **`web/docs/DESIGN.md`**
+> 📐 Flujo KYC en vault: `Flujo de KYC` · `Spec — Matcher DNI + Selfie (Capa 1)`
 
 ## Documentación
 
@@ -18,11 +18,13 @@ Toda la documentación del frontend vive en **`web/docs/`**:
 ## Desarrollo
 
 ```bash
-npm install          # desde la raíz del monorepo
-npm run dev          # o: npm run dev --workspace @behuman/web
+npm install                         # desde la raíz del monorepo
+npm run serve -w @behuman/issuer    # backend matcher en :8787 (necesita modelos)
+npm run dev -w @behuman/web         # frontend en :5173
 ```
 
-Abre http://localhost:5173
+Abre http://localhost:5173. La cámara requiere contexto seguro (localhost o https).
+Config: `VITE_MATCHER_URL` (default `http://localhost:8787`).
 
 ## Rama de trabajo
 
@@ -43,6 +45,8 @@ web/
     │   ├── sections/     # HowItWorks, Stats, Compare
     │   └── ui/           # Button, Badge
     ├── hooks/            # pointer spring/trail, reduced motion
+    ├── kyc/              # gate Capa 1 (consent → DNI → cara → ZK)
+    ├── platform/         # opinión + moderación (Capa 2)
     ├── styles/           # tokens.css, global.css
     ├── test/             # setup vitest
     ├── App.tsx
@@ -54,9 +58,14 @@ web/
 | Comando | Descripción |
 |---------|-------------|
 | `npm run dev` | Vite dev server |
-| `npm run build` | typecheck + bundle |
+| `npm run build` | copy circuit + typecheck + bundle |
 | `npm run test` | Vitest |
 | `npm run lint` | ESLint |
+
+## Privacidad
+
+Las imágenes van al backend por multipart y **no se persisten**; el backend devuelve solo
+`ok/score/liveness/reasons`. Nada de PII toca la cadena.
 
 ## Próximos pasos
 

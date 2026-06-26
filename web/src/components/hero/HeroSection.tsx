@@ -6,7 +6,19 @@ import "./HeroSection.css";
 
 const MARQUEE_ITEMS = [...hero.stackItems, ...hero.stackItems];
 
-export function HeroSection() {
+type HeroSectionProps = {
+  onStartVerify?: () => void;
+  onViewStatus?: () => void;
+  onOpenPlatform?: () => void;
+  onOpenModeration?: () => void;
+};
+
+export function HeroSection({
+  onStartVerify,
+  onViewStatus,
+  onOpenPlatform,
+  onOpenModeration,
+}: HeroSectionProps) {
   return (
     <section className="hero" aria-labelledby="hero-title">
       <HeroBackground />
@@ -18,15 +30,33 @@ export function HeroSection() {
         </h1>
         <p className="hero__lead">{hero.lead}</p>
         <div className="hero__actions">
-          <Button variant="primary" disabled title="Próximamente — flujo KYC con @behuman/sdk">
+          <Button
+            variant="primary"
+            disabled={!onStartVerify}
+            onClick={onStartVerify}
+            title={onStartVerify ? undefined : "Próximamente — flujo KYC con @behuman/sdk"}
+          >
             Comenzar verificación
           </Button>
           <Button
             variant="secondary"
-            onClick={() => document.getElementById("como-funciona")?.scrollIntoView()}
+            onClick={
+              onViewStatus ??
+              (() => document.getElementById("como-funciona")?.scrollIntoView())
+            }
           >
-            Ver flujo KYC
+            {onViewStatus ? "Ver mi estado" : "Ver flujo KYC"}
           </Button>
+          {onOpenPlatform && (
+            <Button variant="ghost" onClick={onOpenPlatform}>
+              Plataforma
+            </Button>
+          )}
+          {onOpenModeration && (
+            <Button variant="ghost" onClick={onOpenModeration}>
+              Moderación
+            </Button>
+          )}
         </div>
         <p className="hero__chains">{hero.stackLabel}</p>
         <div className="hero__marquee" aria-hidden="true">

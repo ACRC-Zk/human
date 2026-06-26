@@ -28,6 +28,19 @@ target/
 *.sym
 witness.wtns
 **/verification_key.json
+# Intermedios regenerables del pipeline ZK (el snapshot de la prueba vive en
+# kyc_verifier/src/testdata.rs, generado con scripts/gen_testdata.mjs)
+**/circuits/input.json
+**/circuits/address_hash.hex
+
+# --- Soroban test snapshots (generados al correr los tests) ---
+**/test_snapshots/
+
+# --- Modelos de face-api (pesados; se bajan con `npm run download-models`) ---
+identity/issuer/matcher/models/
+
+# --- Estado local del issuer (commitments + hashes de de-dup, NO es PII) ---
+identity/issuer/.issuer-state.json
 
 # --- Coordinación entre agentes (no es código del producto) ---
 .comms/
@@ -40,3 +53,22 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+/web/vite.config.js
+/web/vite.config.d.ts
+
+# --- Deploy local (ids + secretos efímeros de testnet) ---
+/.deploy/
+
+# --- tesseract.js: datos de idioma (se descargan solos) ---
+**/*.traineddata
+**/*.traineddata.gz
+
+# --- artefactos del circuito servidos al frontend (se copian con copy-circuit.sh) ---
+/web/public/circuits/
+
+# --- Plataforma CAPA 2 (store local, no PII) ---
+platform/api/.platform-store.json
+/web/public/circuits-platform/
+
+# --- Curaduria CAPA 2 (cola de moderacion local, no PII) ---
+**/.moderation-queue*.json
