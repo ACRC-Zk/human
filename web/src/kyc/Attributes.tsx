@@ -43,8 +43,11 @@ export function Attributes({ onNext }: { onNext: (a: AttributesInput) => void })
         Nº de documento (para evitar duplicados; no se guarda)
         <input value={docId} onChange={(e) => setDocId(e.target.value)} placeholder="12345678" />
       </label>
+      <p style={{ fontSize: "0.85em", opacity: 0.75 }}>
+        Estos datos se <strong>cotejan contra tu DNI</strong>: si no coinciden, se te pedirá un documento válido.
+      </p>
       <button type="button" disabled={!valid} onClick={() => onNext({ birthYear: year, countryCode, docId: docId.trim() })}>
-        Continuar al escaneo de cara
+        Cotejar con el DNI y continuar
       </button>
     </section>
   );

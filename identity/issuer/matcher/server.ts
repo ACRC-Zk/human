@@ -14,7 +14,7 @@ import express from "express";
 import multer from "multer";
 import type { EnrollmentResult, MatchResult } from "@behuman/shared";
 import { getProvider } from "./provider.js";
-import { validateDocument } from "./documentCheck.js";
+import { validateDocument, validateDocumentData } from "./documentCheck.js";
 import { enrollVerifiedHuman } from "../src/index.js";
 
 // Cargar .env desde la raíz del repo (matcher/ está en identity/issuer/matcher).
@@ -59,6 +59,28 @@ app.post("/document", upload.single("document"), async (req, res) => {
   } catch (err) {
     console.error("[document] error:", (err as Error).message);
     res.status(500).json({ error: "document_check_failed" });
+  }
+});
+
+// Anti-fraude: coteja los datos declarados (año de nacimiento + nº de documento + país)
+// contra el OCR del DNI. Si no coinciden, el frontend "rebota" el DNI para subir uno válido.
+// Respuesta PII-free: solo ok + nombres de campos que no coinciden (nunca los valores).
+app.post("/verify-data", upload.single("document"), async (req, res) => {
+  const document = req.file?.buffer;
+  if (!document) return res.status(400).json({ error: "missing_document" });
+  const birthYear = Number(req.body?.birthYear);
+  const docId = String(req.body?.docId ?? "");
+  const countryCode = Number(req.body?.countryCode);
+  if (!birthYear || !docId || !countryCode) return res.status(400).json({ error: "missing_fields" });
+  try {
+    const check = await validateDocumentData(document, { birthYear, docId, countryCode });
+    console.log(
+      `[verify-data] ok=${check.ok} dataOk=${check.dataOk} mismatches=${check.mismatches.join(",")} reasons=${check.reasons.join(",")}`,
+    );
+    res.json({ ok: check.ok, reasons: check.reasons, mismatches: check.mismatches });
+  } catch (err) {
+    console.error("[verify-data] error:", (err as Error).message);
+    res.status(500).json({ error: "data_check_failed" });
   }
 });
 
@@ -115,17 +137,24 @@ app.post(
     const selfieFrames = (files?.selfie ?? []).map((f) => f.buffer);
     const commitment = String(req.body?.commitment ?? "");
     const docId = String(req.body?.docId ?? "");
+    // Datos declarados para el cotejo anti-fraude (efímeros; nunca se persisten ni loguean).
+    const birthYear = Number(req.body?.birthYear);
+    const countryCode = Number(req.body?.countryCode);
 
     if (!document) return res.status(400).json({ error: "missing_document" });
     if (selfieFrames.length === 0) return res.status(400).json({ error: "missing_selfie" });
     if (!commitment) return res.status(400).json({ error: "missing_commitment" });
     if (!docId) return res.status(400).json({ error: "missing_docId" });
+    if (!birthYear || !countryCode) return res.status(400).json({ error: "missing_declared_data" });
 
     try {
-      const docCheck = await validateDocument(document);
+      // Anti-fraude AUTORITATIVO: el DNI debe ser válido Y los datos declarados deben
+      // coincidir con el OCR. No se puede evadir desde un cliente manipulado.
+      const docCheck = await validateDocumentData(document, { birthYear, docId, countryCode });
       if (!docCheck.ok) {
-        console.log(`[enroll] documento inválido reasons=${docCheck.reasons.join(",")}`);
-        return res.json({ ok: false, reasons: docCheck.reasons } satisfies EnrollmentResult);
+        const reasons = docCheck.mismatches.length ? ["data_mismatch", ...docCheck.reasons] : docCheck.reasons;
+        console.log(`[enroll] rechazo reasons=${reasons.join(",")} mismatches=${docCheck.mismatches.join(",")}`);
+        return res.json({ ok: false, reasons } satisfies EnrollmentResult);
       }
       const result: EnrollmentResult = await enrollVerifiedHuman({
         document,

@@ -15,7 +15,13 @@ const REASON_TEXT: Record<string, string> = {
   no_face_in_document: "No se detecta una cara en el documento.",
 };
 
-export function DocumentUpload({ onNext }: { onNext: (doc: Blob) => void }) {
+export function DocumentUpload({
+  onNext,
+  notice,
+}: {
+  onNext: (doc: Blob) => void;
+  notice?: string | null;
+}) {
   const [doc, setDoc] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
@@ -39,6 +45,11 @@ export function DocumentUpload({ onNext }: { onNext: (doc: Blob) => void }) {
     <section className="app__card">
       <h2>1 · Foto del DNI</h2>
       <p>Subí una foto del <strong>frente de tu documento de identidad</strong> (que se vea tu cara).</p>
+      {notice && (
+        <p style={{ color: "#c5221f", background: "#fce8e6", padding: "8px 10px", borderRadius: 6 }}>
+          ⚠️ {notice}
+        </p>
+      )}
       <input type="file" accept="image/*" onChange={onPick} />
       {preview && (
         <div style={{ marginTop: 12 }}>
@@ -65,7 +76,7 @@ export function DocumentUpload({ onNext }: { onNext: (doc: Blob) => void }) {
         disabled={!doc || status.kind !== "ok"}
         onClick={() => doc && onNext(doc)}
       >
-        Continuar al escaneo de cara
+        Continuar a tus datos
       </button>
     </section>
   );

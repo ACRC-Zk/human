@@ -14,7 +14,7 @@ import { DocumentUpload } from "./DocumentUpload";
 import { Attributes, type AttributesInput } from "./Attributes";
 import { FaceScan } from "./FaceScan";
 import { connectWallet } from "./wallet";
-import { enroll } from "./api";
+import { enroll, verifyDocumentData } from "./api";
 import { computeCommitment, generateProof, randomSecret, type GeneratedProof } from "./zk";
 import { initIfNeeded, isVerified, verifyAndRegister, ContractError } from "./chain";
 import { CONTRACT_ID } from "./stellar";
@@ -29,6 +29,18 @@ const REASON: Record<string, string> = {
   not_an_id_document: "La imagen no es un documento de identidad.",
   no_face_in_document: "No se detecta cara en el documento.",
   no_face_in_selfie: "No se detecta tu cara en el escaneo.",
+  data_mismatch: "Los datos declarados no coinciden con el DNI.",
+  document_unreadable: "No se pudo leer el documento (subí una foto más nítida).",
+};
+
+// Por qué se rebota un DNI (cotejo de datos): nombres de campo → texto.
+const DATA_REASON: Record<string, string> = {
+  doc_number: "el número de documento",
+  birth_year: "el año de nacimiento",
+  country: "el país",
+  document_unreadable: "no se pudo leer el documento",
+  not_an_id_document: "no parece un documento de identidad",
+  no_face_in_document: "no se detecta la cara en el documento",
 };
 
 export function KycFlow() {
@@ -42,10 +54,30 @@ export function KycFlow() {
   const [verified, setVerified] = useState(false);
   const [lastProof, setLastProof] = useState<GeneratedProof | null>(null);
   const [nullifierMsg, setNullifierMsg] = useState<string | null>(null);
+  const [bounce, setBounce] = useState<string | null>(null);
 
   function fail(m: string) {
     setError(m);
     setStep("error");
+  }
+
+  // Anti-fraude: tras declarar los datos, se cotejan contra el DNI. Si no coinciden,
+  // se "rebota" el DNI (vuelve al paso de subida) para cargar uno válido que coincida.
+  async function onAttributes(a: AttributesInput) {
+    setAttrs(a);
+    if (!doc) return setStep("document");
+    setStep("processing");
+    setMsg("Cotejando tus datos con el DNI…");
+    try {
+      const r = await verifyDocumentData(doc, a);
+      if (r.ok) return setStep("scan");
+      const why = (r.mismatches.length ? r.mismatches : r.reasons).map((x) => DATA_REASON[x] ?? x).join(", ");
+      setDoc(null);
+      setBounce(`El DNI no coincide con tus datos (${why}). Subí un documento válido cuyos datos coincidan.`);
+      setStep("document");
+    } catch (e) {
+      fail("No se pudo cotejar el documento: " + (e as Error).message);
+    }
   }
 
   async function onConnect() {
@@ -71,7 +103,11 @@ export function KycFlow() {
         const commitment = await computeCommitment(attrs, secret);
 
         setMsg("Validando documento + cara y registrando en el issuer…");
-        const en = await enroll(doc, frames, commitment, attrs.docId);
+        const en = await enroll(doc, frames, commitment, {
+          docId: attrs.docId,
+          birthYear: attrs.birthYear,
+          countryCode: attrs.countryCode,
+        });
         if (!en.ok) {
           if (en.reasons.includes("already_enrolled")) {
             return fail(
@@ -155,8 +191,14 @@ export function KycFlow() {
     );
 
   if (step === "consent") return <Consent onAccept={() => setStep("document")} />;
-  if (step === "document") return <DocumentUpload onNext={(d) => { setDoc(d); setStep("attributes"); }} />;
-  if (step === "attributes") return <Attributes onNext={(a) => { setAttrs(a); setStep("scan"); }} />;
+  if (step === "document")
+    return (
+      <DocumentUpload
+        notice={bounce}
+        onNext={(d) => { setDoc(d); setBounce(null); setStep("attributes"); }}
+      />
+    );
+  if (step === "attributes") return <Attributes onNext={onAttributes} />;
   if (step === "scan") return <FaceScan onCaptured={process} />;
 
   if (step === "processing")
