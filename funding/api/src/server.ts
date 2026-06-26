@@ -55,10 +55,13 @@ dotenv.config({ path: resolve(here, "..", "..", "..", ".env") });
 
 const provider = (process.env.FUNDING_PROVIDER ?? "dev") as FundingProviderKind;
 const ASSET = (process.env.ASSET ?? "XLM") as FundingAsset;
+const NETWORK = (process.env.DEFINDEX_NETWORK ?? "testnet") as "testnet" | "mainnet" | "public";
+const DEFAULT_VAULT = process.env.DEFINDEX_VAULT ?? "";
 const defindex = createDefindex({
   provider,
   apiUrl: process.env.DEFINDEX_API_URL ?? "https://api.defindex.io",
   apiKey: process.env.DEFINDEX_API_KEY,
+  network: NETWORK,
 });
 const tw = createTrustlessWork({
   provider,
@@ -173,7 +176,8 @@ app.post(
       raisedAmount: "0",
       deadline: Number(b.deadline ?? Date.now() + 30 * 24 * 3600 * 1000),
       causeWallet: String(b.causeWallet),
-      vaultAddress: provider === "dev" ? "vault_dev_" + id.slice(0, 8) : String(b.vaultAddress ?? ""),
+      vaultAddress:
+        provider === "dev" ? "vault_dev_" + id.slice(0, 8) : String(b.vaultAddress ?? DEFAULT_VAULT),
       controllerAddress: b.controllerAddress ? String(b.controllerAddress) : undefined,
       escrowId: escrow.escrowId,
       signers,

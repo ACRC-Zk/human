@@ -1,22 +1,33 @@
 // Wrapper de DeFindex (yield en Blend) — https://docs.defindex.io
 //
 // Provider configurable:
-//  - "real": pega a la API de DeFindex (api.defindex.io) con API key. Patrón: la API arma
-//    la tx (XDR), el donante firma con su wallet anónima, se envía a /send.
+//  - "real": pega a la API de DeFindex (api.defindex.io) con API key (Bearer). Patrón: la API
+//    arma la tx (XDR), el donante firma con su wallet anónima, se envía a POST /send. La red
+//    se pasa como `?network=` en cada request.
 //  - "dev": mock determinístico para construir/testear el flujo sin depender de testnet.
 //
 // El wrapper es un ADAPTADOR sin estado de campaña; el bookkeeping de donaciones/shares lo
-// lleva funding/api. ⚠️ Las shapes "real" siguen el patrón de la doc y deben verificarse
-// contra docs.defindex.io al conectar las keys.
+// lleva funding/api. Shapes "real" VALIDADAS contra el OpenAPI de api.defindex.io (/api-json)
+// y un depósito real ejecutado en testnet contra el vault XLM oficial.
+//
+// Convenciones de unidades: `amount` entra en unidades del activo (XLM); DeFindex usa
+// stroops (1 XLM = 1e7). `apy` de la API viene en PORCENTAJE (13.23) → se normaliza a
+// fracción (0.1323) para ser consistente con el resto del cálculo de yield.
 import type { VaultPosition } from "@behuman/shared";
 
 export type FundingProviderKind = "real" | "dev";
+export type StellarNetwork = "testnet" | "mainnet" | "public";
 
 export interface DefindexConfig {
   provider: FundingProviderKind;
   apiUrl: string;
   apiKey?: string;
+  network?: StellarNetwork; // default: testnet
 }
+
+const STROOPS = 10_000_000; // 1e7
+const toStroops = (amount: string): number => Math.round(Number(amount) * STROOPS);
+const fromStroops = (s: string | number): string => (Number(s) / STROOPS).toString();
 
 export interface Defindex {
   readonly provider: FundingProviderKind;
@@ -38,41 +49,54 @@ export function createDefindex(cfg: DefindexConfig): Defindex {
 // ─── real ────────────────────────────────────────────────────────────────────
 function realDefindex(cfg: DefindexConfig): Defindex {
   const base = cfg.apiUrl.replace(/\/$/, "");
+  const net = cfg.network ?? "testnet";
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
+  const q = (path: string) => `${base}${path}${path.includes("?") ? "&" : "?"}network=${net}`;
 
   async function post(path: string, body: unknown): Promise<any> {
-    const res = await fetch(`${base}${path}`, { method: "POST", headers, body: JSON.stringify(body) });
-    if (!res.ok) throw new Error(`defindex ${path} -> HTTP ${res.status}`);
+    const res = await fetch(q(path), { method: "POST", headers, body: JSON.stringify(body) });
+    if (!res.ok) throw new Error(`defindex ${path} -> HTTP ${res.status} ${await res.text().catch(() => "")}`);
     return res.json();
   }
   async function get(path: string): Promise<any> {
-    const res = await fetch(`${base}${path}`, { headers });
+    const res = await fetch(q(path), { headers });
     if (!res.ok) throw new Error(`defindex ${path} -> HTTP ${res.status}`);
     return res.json();
   }
 
   return {
     provider: "real",
+    // POST /vault/{address}/deposit { amounts:[stroops], caller } -> { xdr }
     async buildDeposit(vault, from, amount) {
-      const r = await post(`/vault/${vault}/deposit`, { from, amount });
+      const r = await post(`/vault/${vault}/deposit`, { amounts: [toStroops(amount)], caller: from });
       return { xdr: r.xdr };
     },
+    // POST /vault/{address}/withdraw { amounts:[stroops], caller } -> { xdr }
     async buildWithdraw(vault, who, shares) {
-      const r = await post(`/vault/${vault}/withdraw`, { from: who, shares });
+      const r = await post(`/vault/${vault}/withdraw`, { amounts: [toStroops(shares)], caller: who });
       return { xdr: r.xdr };
     },
+    // POST /send { xdr } -> { txHash, success }
     async send(signedXdr) {
       const r = await post(`/send`, { xdr: signedXdr });
-      return { hash: r.hash };
+      if (r.success === false) throw new Error(`defindex /send falló: ${JSON.stringify(r).slice(0, 200)}`);
+      return { hash: String(r.txHash ?? r.hash ?? "") };
     },
+    // GET /vault/{address}/balance?from= -> { dfTokens, underlyingBalance:[stroops] }
     async balance(vault, who) {
       const r = await get(`/vault/${vault}/balance?from=${encodeURIComponent(who)}`);
-      return { shares: String(r.shares ?? "0"), underlying: String(r.underlying ?? "0"), apy: Number(r.apy ?? 0) };
+      const underlying = Array.isArray(r.underlyingBalance) ? r.underlyingBalance[0] : r.underlyingBalance;
+      return {
+        shares: String(r.dfTokens ?? "0"),
+        underlying: fromStroops(underlying ?? 0),
+        apy: await this.apy(vault),
+      };
     },
+    // GET /vault/{address}/apy -> { apy: <porcentaje> }  →  fracción
     async apy(vault) {
       const r = await get(`/vault/${vault}/apy`);
-      return Number(r.apy ?? 0);
+      return Number(r.apy ?? 0) / 100;
     },
   };
 }
