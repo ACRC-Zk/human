@@ -1,6 +1,7 @@
 // Subida de la foto del DNI (frente, con la cara visible).
 // Valida en el backend que SEA un documento de identidad antes de habilitar el escaneo.
 import { useState } from "react";
+import { Button } from "../components/ui/Button";
 import { checkDocument } from "./api";
 
 type Status =
@@ -42,42 +43,36 @@ export function DocumentUpload({
   }
 
   return (
-    <section className="app__card">
-      <h2>1 · Foto del DNI</h2>
-      <p>Subí una foto del <strong>frente de tu documento de identidad</strong> (que se vea tu cara).</p>
-      {notice && (
-        <p style={{ color: "#c5221f", background: "#fce8e6", padding: "8px 10px", borderRadius: 6 }}>
-          ⚠️ {notice}
-        </p>
-      )}
-      <input type="file" accept="image/*" onChange={onPick} />
-      {preview && (
-        <div style={{ marginTop: 12 }}>
-          <img src={preview} alt="DNI" style={{ maxWidth: "100%", borderRadius: 8 }} />
-        </div>
-      )}
+    <section className="bh-card">
+      <p className="bh-eyebrow">Paso 1 de 3</p>
+      <h2 className="bh-h2">Foto del DNI</h2>
+      <p className="bh-sub">
+        Subí una foto del <strong>frente de tu documento</strong> donde se vea tu cara.
+      </p>
+      {notice && <div className="bh-banner bh-banner--warn">⚠️ {notice}</div>}
 
-      {status.kind === "checking" && <p>Verificando que sea un documento…</p>}
-      {status.kind === "ok" && <p style={{ color: "#137333" }}>✅ Documento válido.</p>}
+      <input className="bh-input" type="file" accept="image/*" onChange={onPick} />
+      {preview && <img src={preview} alt="DNI" className="bh-preview" />}
+
+      {status.kind === "checking" && <p className="bh-note">Verificando que sea un documento…</p>}
+      {status.kind === "ok" && <p className="bh-note bh-note--ok">✅ Documento válido.</p>}
       {status.kind === "invalid" && (
-        <div style={{ color: "#c5221f" }}>
+        <div className="bh-note bh-note--err">
           <p>❌ No es un documento de identidad válido. Subí una foto del DNI.</p>
-          <ul>
+          <ul className="bh-list">
             {status.reasons.map((r) => (
               <li key={r}>{REASON_TEXT[r] ?? r}</li>
             ))}
           </ul>
         </div>
       )}
-      {status.kind === "error" && <p style={{ color: "#c5221f" }}>Error: {status.message}</p>}
+      {status.kind === "error" && <p className="bh-note bh-note--err">Error: {status.message}</p>}
 
-      <button
-        type="button"
-        disabled={!doc || status.kind !== "ok"}
-        onClick={() => doc && onNext(doc)}
-      >
-        Continuar a tus datos
-      </button>
+      <div className="bh-actions">
+        <Button disabled={!doc || status.kind !== "ok"} onClick={() => doc && onNext(doc)}>
+          Continuar a tus datos
+        </Button>
+      </div>
     </section>
   );
 }

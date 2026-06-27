@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import * as StellarSdk from "@stellar/stellar-sdk";
 import type { Campaign, CampaignOpinion, Sentiment } from "@behuman/shared";
+import { Button } from "../components/ui/Button";
 import { loadAnyCredential } from "../kyc/credentialStore";
 import { generatePlatformProof } from "../platform/zk2";
 import {
@@ -25,7 +26,7 @@ import {
   signFundingAction,
 } from "../funding/zk3";
 import { humanState } from "./CausesPage";
-import "./Causes.css";
+import "../styles/behuman-ui.css";
 
 const isRealTx = (h: string) => /^[0-9a-f]{64}$/i.test(h);
 const fmt = (n: string | number) => Number(n).toLocaleString("es-AR", { maximumFractionDigits: 4 });
@@ -168,8 +169,8 @@ export function CampaignDetailPage() {
     }
   }
 
-  if (error && !c) return <div className="causes"><p className="note note--err">{error}</p></div>;
-  if (!c) return <div className="causes"><p className="note">Cargando…</p></div>;
+  if (error && !c) return <div className="bh"><p className="bh-note bh-note--err">{error}</p></div>;
+  if (!c) return <div className="bh"><p className="bh-note">Cargando…</p></div>;
 
   const s = humanState(c);
   const pct = Math.min(100, (Number(c.raisedAmount) / Math.max(1, Number(c.goalAmount))) * 100);
@@ -179,138 +180,136 @@ export function CampaignDetailPage() {
     setSigners((x) => (x.includes(a) ? x.filter((y) => y !== a) : [...x, a]));
 
   return (
-    <div className="causes">
-      <Link to="/app/causes" className="cause-detail__back">← Causas</Link>
-      <header className="cause-detail__header">
-        <span className={`cause-state cause-state--${s.cls}`}>{s.label}</span>
-        <h1 className="cause-detail__title">{c.title}</h1>
-        <p className="cause-detail__meta">
+    <div className="bh">
+      <Link to="/app/causes" className="bh-back">← Causas</Link>
+      <header style={{ margin: "0.75rem 0 1rem" }}>
+        <span className={`bh-state bh-state--${s.cls}`}>{s.label}</span>
+        <h1 className="bh-h1" style={{ marginTop: "0.5rem" }}>{c.title}</h1>
+        <p className="bh-muted" style={{ fontSize: "0.9rem" }}>
           {fmt(c.raisedAmount)} / {fmt(c.goalAmount)} {c.asset} · cierra el{" "}
           {new Date(c.deadline).toLocaleDateString("es-AR")}
         </p>
-        <div className="progress" style={{ marginTop: 10 }}>
-          <div className="progress__bar" style={{ width: `${pct}%` }} />
+        <div className="bh-progress" style={{ marginTop: "0.6rem" }}>
+          <div className="bh-progress__bar" style={{ width: `${pct}%` }} />
         </div>
-        <p className="note" style={{ marginTop: 10 }}>{c.summary}</p>
+        <p className="bh-sub" style={{ marginTop: "0.75rem" }}>{c.summary}</p>
       </header>
 
       {!cred && (
-        <div className="panel">
-          <p>Para donar u opinar, primero <Link to="/onboarding" className="cause-detail__back">verificate como humano</Link>.</p>
+        <div className="bh-card">
+          <p className="bh-p">
+            Para donar u opinar, primero{" "}
+            <Link to="/onboarding" className="bh-back">verificate como humano</Link>.
+          </p>
         </div>
       )}
 
       {/* Donar */}
       {cred && c.state === "fundraising" && (
-        <div className="panel">
-          <p className="panel__legend">Donar (anónimo · genera rendimiento)</p>
-          <div className="field-row">
-            <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} style={{ width: 130 }} />
-            <span>{c.asset}</span>
-            <button type="button" className="btn" onClick={doDonate} disabled={!!busy || Number(amount) <= 0}>
-              Donar
-            </button>
+        <div className="bh-card">
+          <h2 className="bh-h2">Donar (anónimo · genera rendimiento)</h2>
+          <div className="bh-actions">
+            <input className="bh-input bh-input--sm" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <span className="bh-muted">{c.asset}</span>
+            <Button onClick={doDonate} disabled={!!busy || Number(amount) <= 0}>Donar</Button>
           </div>
           {position && (
-            <p className="note note--ok">
-              Aportaste y hoy vale ~{fmt(position.underlying)} {c.asset} (rinde {(position.apy * 100).toFixed(1)}%/año) ·
-              desde una wallet anónima.
-              <br />
-              <button type="button" className="btn btn--ghost" style={{ marginTop: 6 }} onClick={doRefund} disabled={!!busy}>
-                Recuperar mi aporte (si la causa no llega a la meta)
-              </button>
+            <p className="bh-note bh-note--ok">
+              Aportaste y hoy vale ~{fmt(position.underlying)} {c.asset} (rinde {(position.apy * 100).toFixed(1)}%/año), desde una wallet anónima.
             </p>
+          )}
+          {position && (
+            <div className="bh-actions">
+              <Button variant="ghost" onClick={doRefund} disabled={!!busy}>
+                Recuperar mi aporte (si la causa no llega a la meta)
+              </Button>
+            </div>
           )}
         </div>
       )}
 
       {/* Panel validador */}
-      <div className="panel">
-        <p className="panel__legend">Panel de validador</p>
-        {c.milestones.length === 0 && <p className="note">Esta causa no tiene hitos.</p>}
+      <div className="bh-card">
+        <h2 className="bh-h2">Panel de validador</h2>
+        {c.milestones.length === 0 && <p className="bh-note">Esta causa no tiene hitos.</p>}
         {c.milestones.map((m) => (
-          <div key={m.id} className="milestone">
+          <div key={m.id} className="bh-milestone">
             <span>{m.status === "approved" ? "✅" : "⏳"}</span>
             <span style={{ flex: 1 }}>{m.title}</span>
             {m.status !== "approved" && (
-              <button type="button" className="btn btn--ghost" onClick={() => approve(m.id)} disabled={!!busy}>
-                Aprobar
-              </button>
+              <Button variant="ghost" onClick={() => approve(m.id)} disabled={!!busy}>Aprobar</Button>
             )}
           </div>
         ))}
-        <p className="note" style={{ marginTop: 10 }}>Firmantes para liberar (2 de 3):</p>
+        <p className="bh-note">Firmantes para liberar (2 de 3):</p>
         {(["cause", "platform", "neutral"] as const).map((role) => {
           const addr = c.signers[role];
           const label = role === "cause" ? "Causa" : role === "platform" ? "Plataforma" : "Neutral";
           return (
-            <label key={role} className="signer-check">
+            <label key={role} className="bh-signer">
               <input type="checkbox" checked={signers.includes(addr)} onChange={() => toggleSigner(addr)} />
               {label}
             </label>
           );
         })}
-        <button
-          type="button"
-          className="btn"
-          style={{ marginTop: 10 }}
-          onClick={doRelease}
-          disabled={!!busy || c.state !== "fundraising" || signers.length < 2 || !allApproved || !goalReached}
-        >
-          Liberar los fondos a la causa
-        </button>
+        <div className="bh-actions">
+          <Button
+            onClick={doRelease}
+            disabled={!!busy || c.state !== "fundraising" || signers.length < 2 || !allApproved || !goalReached}
+          >
+            Liberar los fondos a la causa
+          </Button>
+        </div>
         {c.state === "fundraising" && (!allApproved || !goalReached) && (
-          <p className="note">Requiere todos los hitos aprobados y la meta alcanzada.</p>
+          <p className="bh-note">Requiere todos los hitos aprobados y la meta alcanzada.</p>
         )}
         {lastTx && (
-          <p className="note note--ok">
+          <p className="bh-note bh-note--ok">
             ✅ Fondos entregados a la causa (capital + rendimiento).{" "}
             {isRealTx(lastTx) ? (
-              <a href={`https://stellar.expert/explorer/testnet/tx/${lastTx}`} target="_blank" rel="noreferrer" className="cause-detail__back">
+              <a href={`https://stellar.expert/explorer/testnet/tx/${lastTx}`} target="_blank" rel="noreferrer" className="bh-back">
                 Ver la transacción
               </a>
             ) : (
-              <span> (transacción simulada en este entorno)</span>
+              <span>(transacción simulada en este entorno)</span>
             )}
           </p>
         )}
       </div>
 
       {/* Opiniones */}
-      <div className="panel">
-        <p className="panel__legend">Opiniones (1 persona, 1 voz)</p>
-        <div className="sentiment">
+      <div className="bh-card">
+        <h2 className="bh-h2">Opiniones (1 persona, 1 voz)</h2>
+        <div className="bh-sentiment">
           <span>👍 {counts.support}</span>
           <span>👎 {counts.oppose}</span>
         </div>
         {cred && (
           <>
-            <textarea rows={2} value={opinion} onChange={(e) => setOpinion(e.target.value)} placeholder="Tu opinión sobre esta causa…" />
-            <div className="field-row" style={{ marginTop: 8 }}>
-              <select value={sentiment} onChange={(e) => setSentiment(e.target.value as Sentiment)}>
+            <textarea className="bh-textarea" rows={2} value={opinion} onChange={(e) => setOpinion(e.target.value)} placeholder="Tu opinión sobre esta causa…" />
+            <div className="bh-actions">
+              <select className="bh-select bh-input--sm" value={sentiment} onChange={(e) => setSentiment(e.target.value as Sentiment)}>
                 <option value="support">A favor</option>
                 <option value="oppose">En contra</option>
                 <option value="neutral">Neutral</option>
               </select>
-              <button type="button" className="btn" onClick={publishOpinion} disabled={!!busy || !opinion.trim()}>
-                Opinar
-              </button>
+              <Button onClick={publishOpinion} disabled={!!busy || !opinion.trim()}>Opinar</Button>
             </div>
           </>
         )}
         {opinions.map((o) => (
-          <div key={o.id} className="opinion">
-            <span className="opinion__handle">@{handleOfCampaign(o.platformId)}</span>
-            <span className="opinion__sentiment">
+          <div key={o.id} className="bh-opinion">
+            <span className="bh-opinion__handle">@{handleOfCampaign(o.platformId)}</span>
+            <span className="bh-opinion__sentiment">
               {o.sentiment === "support" ? "👍" : o.sentiment === "oppose" ? "👎" : "·"}
             </span>
-            <p style={{ margin: "3px 0 0" }}>{o.content}</p>
+            <p style={{ margin: "0.2rem 0 0" }}>{o.content}</p>
           </div>
         ))}
       </div>
 
-      {busy && <p className="note">⏳ {busy}</p>}
-      {error && <p className="note note--err">{error}</p>}
+      {busy && <p className="bh-note">⏳ {busy}</p>}
+      {error && <p className="bh-note bh-note--err">{error}</p>}
     </div>
   );
 }

@@ -9,6 +9,7 @@
 //   1) de-dup por documento en el issuer  -> "este documento ya fue validado".
 //   2) nullifier on-chain en verify_and_register -> "este humano ya tiene identidad".
 import { useState } from "react";
+import { Button } from "../components/ui/Button";
 import { Consent } from "./Consent";
 import { DocumentUpload } from "./DocumentUpload";
 import { Attributes, type AttributesInput } from "./Attributes";
@@ -43,7 +44,7 @@ const DATA_REASON: Record<string, string> = {
   no_face_in_document: "no se detecta la cara en el documento",
 };
 
-export function KycFlow() {
+export function KycFlow({ onDone }: { onDone?: () => void } = {}) {
   const [step, setStep] = useState<Step>("connect");
   const [address, setAddress] = useState<string | null>(null);
   const [doc, setDoc] = useState<Blob | null>(null);
@@ -187,35 +188,45 @@ export function KycFlow() {
 
   if (step === "connect")
     return (
-      <section className="app__card">
-        <h2>Conectá tu wallet</h2>
-        <p>Tu identidad verificada quedará registrada en Stellar (testnet) bajo esta dirección.</p>
+      <section className="bh-card">
+        <p className="bh-eyebrow">Verificación de identidad</p>
+        <h2 className="bh-h2">Conectá tu wallet</h2>
+        <p className="bh-sub">
+          Vas a verificar que sos una persona real y única. Tu identidad queda registrada de
+          forma anónima; nunca publicamos tus datos.
+        </p>
         {!CONTRACT_ID && (
-          <p style={{ color: "#c5221f" }}>
-            ⚠️ Falta <code>VITE_KYC_VERIFIER_CONTRACT_ID</code> en el entorno del frontend.
-          </p>
+          <p className="bh-note bh-note--err">⚠️ Falta configurar el contrato verificador.</p>
         )}
-        <button type="button" onClick={onConnect}>Conectar wallet</button>
+        <div className="bh-actions">
+          <Button onClick={onConnect}>Conectar wallet</Button>
+        </div>
       </section>
     );
 
   if (step === "checking")
     return (
-      <section className="app__card">
-        <h2>Un segundo…</h2>
-        <p>Comprobando si esta wallet ya tiene una identidad verificada.</p>
+      <section className="bh-card">
+        <h2 className="bh-h2">Un segundo…</h2>
+        <p className="bh-sub">Comprobando si esta wallet ya tiene una identidad verificada.</p>
       </section>
     );
 
   if (step === "already")
     return (
-      <section className="app__card">
-        <h2>✅ Esta identidad ya existe</h2>
-        <p>
-          Esta wallet <strong>ya tiene una identidad verificada</strong>. No es necesario
-          —ni posible— validar de nuevo: cada persona tiene una sola identidad.
+      <section className="bh-card">
+        <h2 className="bh-h2">✅ Ya estás verificado</h2>
+        <p className="bh-sub">
+          Esta wallet <strong>ya tiene una identidad verificada</strong>. No hace falta validar
+          de nuevo: cada persona tiene una sola identidad.
         </p>
-        <button type="button" onClick={() => window.location.reload()}>Volver al inicio</button>
+        <div className="bh-actions">
+          {onDone ? (
+            <Button onClick={onDone}>Entrar a la app</Button>
+          ) : (
+            <Button onClick={() => window.location.reload()}>Volver al inicio</Button>
+          )}
+        </div>
       </section>
     );
 
@@ -232,45 +243,46 @@ export function KycFlow() {
 
   if (step === "processing")
     return (
-      <section className="app__card">
-        <h2>Procesando…</h2>
-        <p>{msg}</p>
-        <p style={{ fontSize: "0.85em", opacity: 0.7 }}>Puede pedirte firmar en la wallet.</p>
+      <section className="bh-card">
+        <h2 className="bh-h2">Procesando…</h2>
+        <p className="bh-sub">{msg}</p>
+        <p className="bh-note">Puede pedirte firmar en la wallet.</p>
       </section>
     );
 
   if (step === "error")
     return (
-      <section className="app__card">
-        <h2>❌ No verificado</h2>
-        <p>{error}</p>
-        <button type="button" onClick={() => window.location.reload()}>Reintentar</button>
+      <section className="bh-card">
+        <h2 className="bh-h2">No pudimos verificarte</h2>
+        <p className="bh-sub">{error}</p>
+        <div className="bh-actions">
+          <Button onClick={() => window.location.reload()}>Reintentar</Button>
+        </div>
       </section>
     );
 
   // done
   return (
-    <section className="app__card">
-      <h2>{verified ? "✅ Identidad verificada on-chain" : "Registrado (verificando…)"}</h2>
-      <p>
-        <code>is_verified({address?.slice(0, 4)}…{address?.slice(-4)})</code> ={" "}
-        <strong>{String(verified)}</strong>
+    <section className="bh-card">
+      <p className="bh-eyebrow">Listo</p>
+      <h2 className="bh-h2">{verified ? "✅ Sos un humano verificado" : "Registrado (confirmando…)"}</h2>
+      <p className="bh-sub">
+        Tu identidad quedó verificada de forma anónima. Ya podés participar sin revelar quién sos.
       </p>
       {txHash && (
-        <p>
-          tx:{" "}
-          <a href={`https://stellar.expert/explorer/testnet/tx/${txHash}`} target="_blank" rel="noreferrer">
-            {txHash.slice(0, 10)}…
+        <p className="bh-note">
+          <a href={`https://stellar.expert/explorer/testnet/tx/${txHash}`} target="_blank" rel="noreferrer" className="bh-back">
+            Ver el comprobante on-chain
           </a>
         </p>
       )}
-      <hr />
-      <p style={{ fontSize: "0.9em" }}>
-        Anti-Sybil: el mismo documento es rechazado por el issuer (de-dup), y la misma persona
-        es rechazada on-chain por el nullifier.
-      </p>
-      <button type="button" onClick={retryRegister}>Probar candado de nullifier (reenviar prueba)</button>
-      {nullifierMsg && <p>{nullifierMsg}</p>}
+      <div className="bh-actions">
+        {onDone && <Button onClick={onDone}>Entrar a la app</Button>}
+        <Button variant="ghost" onClick={retryRegister}>
+          Probar el candado anti-duplicados
+        </Button>
+      </div>
+      {nullifierMsg && <p className="bh-note">{nullifierMsg}</p>}
     </section>
   );
 }

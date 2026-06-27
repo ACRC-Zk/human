@@ -1,6 +1,7 @@
 // Escaneo de cara en vivo (getUserMedia) + challenge para elicitar vivacidad.
 // Captura varios frames; el liveness real lo evalúa el backend (parpadeo/giro).
 import { useEffect, useRef, useState } from "react";
+import { Button } from "../components/ui/Button";
 
 const CHALLENGES = [
   "Mirá a la cámara",
@@ -66,19 +67,17 @@ export function FaceScan({ onCaptured }: { onCaptured: (frames: Blob[]) => void 
   }
 
   return (
-    <section className="app__card">
-      <h2>2 · Escaneo de cara</h2>
-      <p>{status}</p>
-      <video
-        ref={videoRef}
-        playsInline
-        muted
-        style={{ width: "100%", borderRadius: 8, background: "#000" }}
-      />
-      {prompt && <p style={{ fontWeight: 600 }}>{prompt}</p>}
-      <button type="button" disabled={scanning} onClick={runScan}>
-        {scanning ? "Escaneando…" : "Iniciar escaneo"}
-      </button>
+    <section className="bh-card">
+      <p className="bh-eyebrow">Paso 3 de 3</p>
+      <h2 className="bh-h2">Escaneo de cara</h2>
+      <p className="bh-sub">{status}</p>
+      <video ref={videoRef} playsInline muted className="bh-video" />
+      {prompt && <p className="bh-note" style={{ fontWeight: 600, color: "var(--color-text)" }}>{prompt}</p>}
+      <div className="bh-actions">
+        <Button disabled={scanning} onClick={runScan}>
+          {scanning ? "Escaneando…" : "Iniciar escaneo"}
+        </Button>
+      </div>
     </section>
   );
 }

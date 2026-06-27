@@ -1,6 +1,7 @@
 // Datos declarados (testnet). En producción los atesta RENAPER/OCR.
 // El nº de documento se usa SOLO para el de-dup (hash con pepper); nunca se guarda en claro.
 import { useState } from "react";
+import { Button } from "../components/ui/Button";
 
 export interface AttributesInput {
   birthYear: number;
@@ -24,31 +25,38 @@ export function Attributes({ onNext }: { onNext: (a: AttributesInput) => void })
   const valid = year >= 1900 && year <= 2026 && docId.trim().length >= 4;
 
   return (
-    <section className="app__card">
-      <h2>3 · Tus datos</h2>
-      <p>El circuito sólo prueba <strong>mayor de edad</strong> y <strong>país permitido</strong> — los valores no se publican.</p>
-      <label style={{ display: "block", marginBottom: 8 }}>
-        Año de nacimiento
-        <input type="number" value={birthYear} onChange={(e) => setBirthYear(e.target.value)} placeholder="1995" />
+    <section className="bh-card">
+      <p className="bh-eyebrow">Paso 2 de 3</p>
+      <h2 className="bh-h2">Tus datos</h2>
+      <p className="bh-sub">
+        El circuito sólo prueba <strong>mayor de edad</strong> y <strong>país permitido</strong> — los valores no se publican.
+      </p>
+
+      <label className="bh-field">
+        <span className="bh-label">Año de nacimiento</span>
+        <input className="bh-input" type="number" value={birthYear} onChange={(e) => setBirthYear(e.target.value)} placeholder="1995" />
       </label>
-      <label style={{ display: "block", marginBottom: 8 }}>
-        País
-        <select value={countryCode} onChange={(e) => setCountryCode(Number(e.target.value))}>
+      <label className="bh-field">
+        <span className="bh-label">País</span>
+        <select className="bh-select" value={countryCode} onChange={(e) => setCountryCode(Number(e.target.value))}>
           {COUNTRIES.map((c) => (
             <option key={c.code} value={c.code}>{c.name}</option>
           ))}
         </select>
       </label>
-      <label style={{ display: "block", marginBottom: 8 }}>
-        Nº de documento (para evitar duplicados; no se guarda)
-        <input value={docId} onChange={(e) => setDocId(e.target.value)} placeholder="12345678" />
+      <label className="bh-field">
+        <span className="bh-label">Nº de documento</span>
+        <input className="bh-input" value={docId} onChange={(e) => setDocId(e.target.value)} placeholder="12345678" />
       </label>
-      <p style={{ fontSize: "0.85em", opacity: 0.75 }}>
+
+      <p className="bh-note">
         Estos datos se <strong>cotejan contra tu DNI</strong>: si no coinciden, se te pedirá un documento válido.
       </p>
-      <button type="button" disabled={!valid} onClick={() => onNext({ birthYear: year, countryCode, docId: docId.trim() })}>
-        Cotejar con el DNI y continuar
-      </button>
+      <div className="bh-actions">
+        <Button disabled={!valid} onClick={() => onNext({ birthYear: year, countryCode, docId: docId.trim() })}>
+          Cotejar con el DNI y continuar
+        </Button>
+      </div>
     </section>
   );
 }

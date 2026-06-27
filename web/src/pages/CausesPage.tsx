@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Campaign } from "@behuman/shared";
 import { listCampaigns } from "../funding/api";
-import "./Causes.css";
+import "../styles/behuman-ui.css";
 
 const fmt = (n: string | number) =>
   Number(n).toLocaleString("es-AR", { maximumFractionDigits: 2 });
@@ -23,14 +23,14 @@ function CauseCard({ c }: { c: Campaign }) {
   const pct = Math.min(100, (Number(c.raisedAmount) / Math.max(1, Number(c.goalAmount))) * 100);
   const s = humanState(c);
   return (
-    <Link to={`/app/causes/${c.id}`} className="cause-card">
-      <span className={`cause-state cause-state--${s.cls}`}>{s.label}</span>
-      <span className="cause-card__title">{c.title}</span>
-      <span className="cause-card__summary">{c.summary}</span>
-      <div className="progress">
-        <div className="progress__bar" style={{ width: `${pct}%` }} />
+    <Link to={`/app/causes/${c.id}`} className="bh-cause-card">
+      <span className={`bh-state bh-state--${s.cls}`}>{s.label}</span>
+      <span className="bh-cause-card__title">{c.title}</span>
+      <span className="bh-cause-card__summary">{c.summary}</span>
+      <div className="bh-progress">
+        <div className="bh-progress__bar" style={{ width: `${pct}%` }} />
       </div>
-      <div className="progress__label">
+      <div className="bh-progress__label">
         <span>{fmt(c.raisedAmount)} {c.asset}</span>
         <span>meta {fmt(c.goalAmount)}</span>
       </div>
@@ -49,20 +49,19 @@ export function CausesPage() {
   }, []);
 
   return (
-    <div className="causes">
-      <div className="causes__top">
-        <div>
-          <h1 className="causes__title">Causas</h1>
-          <p className="causes__subtitle">Doná como humano verificado, sin revelar quién sos.</p>
-        </div>
-      </div>
-      {error && <p className="note note--err">No se pudieron cargar las causas: {error}</p>}
-      <div className="causes__grid">
+    <div className="bh">
+      <header style={{ marginBottom: "1.25rem" }}>
+        <p className="bh-eyebrow">Funding ZK</p>
+        <h1 className="bh-h1">Causas</h1>
+        <p className="bh-sub">Doná como humano verificado, sin revelar quién sos.</p>
+      </header>
+      {error && <p className="bh-note bh-note--err">No se pudieron cargar las causas: {error}</p>}
+      <div className="bh-grid">
         {campaigns.map((c) => (
           <CauseCard key={c.id} c={c} />
         ))}
       </div>
-      {campaigns.length === 0 && !error && <p className="note">Todavía no hay causas.</p>}
+      {campaigns.length === 0 && !error && <p className="bh-note">Todavía no hay causas.</p>}
     </div>
   );
 }

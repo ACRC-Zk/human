@@ -4,7 +4,7 @@ import SideRays from "../components/backgrounds/SideRays/SideRays";
 import { LanguageToggle } from "../components/ui/LanguageToggle";
 import { useI18n } from "../i18n/I18nProvider";
 import { useReducedMotion } from "../hooks/useReducedMotion";
-import { connectAndCheck, hasCredential } from "../identity/identity";
+import { connectAndCheck } from "../identity/identity";
 import "./AuthPage.css";
 
 type AuthTab = "login" | "register";
@@ -18,13 +18,14 @@ export function AuthPage({ defaultTab = "login" }: { defaultTab?: AuthTab }) {
   const [error, setError] = useState<string | null>(null);
   const reducedMotion = useReducedMotion();
 
-  // Login: conecta wallet → si ya es humano verificado (o hay credencial), entra; si no, verifica.
+  // Login: conecta la wallet y entra DIRECTO a la app. Si todavía no se verificó, la app
+  // se lo pide al intentar publicar/donar (gating). Conectar = entrar.
   async function handleLogin() {
     setError(null);
     setBusy(true);
     try {
-      const { verified } = await connectAndCheck();
-      navigate(verified || hasCredential() ? "/app" : "/onboarding");
+      await connectAndCheck();
+      navigate("/app");
     } catch (e) {
       setError((e as Error).message);
     } finally {

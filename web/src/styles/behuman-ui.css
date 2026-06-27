@@ -1,0 +1,170 @@
+/**
+ * behuman-ui — estilos compartidos del producto (onboarding KYC + funding), alineados a los
+ * design tokens (tema claro, acento celeste). Usar junto al componente <Button/> del diseño.
+ */
+.bh {
+  font-family: var(--font-sans);
+  color: var(--color-text);
+}
+
+.bh-shell {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: clamp(1rem, 4vw, 2rem) var(--space-gutter) 6rem;
+}
+.bh-shell--wide {
+  max-width: var(--content-max);
+}
+
+.bh-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+.bh-back {
+  color: var(--color-accent-deep);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.bh-back:hover { color: var(--color-accent); }
+
+.bh-card {
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: clamp(1.25rem, 3vw, 1.75rem);
+  box-shadow: 0 1px 3px rgba(10, 10, 10, 0.05);
+  margin-bottom: 1rem;
+}
+
+.bh-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-accent-deep);
+  margin: 0 0 0.4rem;
+}
+.bh-h1 { font-size: clamp(1.5rem, 4vw, 2rem); font-weight: 700; margin: 0 0 0.35rem; }
+.bh-h2 { font-size: 1.25rem; font-weight: 650; margin: 0 0 0.5rem; }
+.bh-sub { color: var(--color-text-muted); margin: 0 0 1rem; font-size: 0.95rem; line-height: 1.5; }
+.bh-p { color: var(--color-text); line-height: 1.55; margin: 0 0 0.85rem; }
+.bh-muted { color: var(--color-text-muted); }
+
+.bh-list { margin: 0 0 1rem; padding-left: 1.1rem; color: var(--color-text-muted); line-height: 1.6; }
+.bh-list li { margin-bottom: 0.35rem; }
+
+.bh-field { display: block; margin-bottom: 0.9rem; }
+.bh-label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.35rem; }
+.bh-input,
+.bh-textarea,
+.bh-select {
+  width: 100%;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: 0.7rem 0.85rem;
+  font: inherit;
+  color: var(--color-text);
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+}
+.bh-input:focus,
+.bh-textarea:focus,
+.bh-select:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-subtle);
+}
+.bh-input--sm { width: auto; min-width: 120px; }
+.bh-textarea { resize: vertical; min-height: 64px; }
+
+.bh-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin-top: 0.5rem; }
+
+.bh-note { font-size: 0.85rem; color: var(--color-text-muted); margin: 0.6rem 0 0; line-height: 1.5; }
+.bh-note--ok { color: #15803d; }
+.bh-note--warn { color: #b45309; }
+.bh-note--err { color: var(--color-error); }
+
+.bh-banner {
+  border-radius: var(--radius-md);
+  padding: 0.7rem 0.85rem;
+  font-size: 0.9rem;
+  margin-bottom: 0.9rem;
+}
+.bh-banner--warn { background: rgba(180, 83, 9, 0.1); color: #92400e; }
+.bh-banner--err { background: rgba(220, 38, 38, 0.08); color: var(--color-error); }
+.bh-banner--ok { background: var(--color-accent-subtle); color: var(--color-accent-deep); }
+
+.bh-video {
+  width: 100%;
+  border-radius: var(--radius-md);
+  background: #000;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+.bh-preview { width: 100%; border-radius: var(--radius-md); margin-top: 0.75rem; border: 1px solid var(--color-border); }
+
+/* Estado del flujo (stepper sutil) */
+.bh-steps { display: flex; gap: 0.4rem; margin-bottom: 1.25rem; }
+.bh-steps__dot { height: 4px; flex: 1; border-radius: 999px; background: var(--color-neutral-200); }
+.bh-steps__dot.is-done { background: var(--color-accent-soft); }
+.bh-steps__dot.is-active { background: var(--color-accent); }
+
+/* ─── Funding / causas ─── */
+.bh-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+.bh-cause-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  text-decoration: none;
+  color: inherit;
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1.1rem;
+  transition: border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+}
+.bh-cause-card:hover {
+  border-color: var(--color-accent-border);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(10, 10, 10, 0.08);
+}
+.bh-cause-card__title { font-weight: 650; font-size: 1.05rem; }
+.bh-cause-card__summary { color: var(--color-text-muted); font-size: 0.88rem; line-height: 1.45; }
+
+.bh-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: fit-content;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-pill);
+}
+.bh-state--fundraising { background: var(--color-accent-muted); color: var(--color-accent-deep); }
+.bh-state--reached,
+.bh-state--released { background: rgba(34, 197, 94, 0.14); color: #15803d; }
+.bh-state--refunding,
+.bh-state--failed { background: rgba(220, 38, 38, 0.1); color: var(--color-error); }
+.bh-state--disputed { background: rgba(234, 179, 8, 0.16); color: #a16207; }
+
+.bh-progress { height: 8px; background: var(--color-neutral-100); border-radius: 999px; overflow: hidden; }
+.bh-progress__bar { height: 100%; background: linear-gradient(90deg, var(--color-accent), var(--color-accent-bright)); border-radius: 999px; transition: width var(--duration-normal) var(--ease-out); }
+.bh-progress__label { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--color-text-muted); }
+
+.bh-milestone { display: flex; align-items: center; gap: 0.5rem; font-size: 0.92rem; padding: 0.3rem 0; }
+.bh-signer { display: flex; align-items: center; gap: 0.5rem; font-size: 0.88rem; color: var(--color-text-muted); padding: 0.2rem 0; }
+
+.bh-sentiment { display: flex; gap: 1.1rem; font-size: 0.95rem; margin-bottom: 0.6rem; }
+.bh-opinion { border-top: 1px solid var(--color-border); padding: 0.6rem 0; font-size: 0.92rem; }
+.bh-opinion__handle { font-weight: 650; }
+.bh-opinion__sentiment { opacity: 0.7; margin-left: 0.4rem; }
