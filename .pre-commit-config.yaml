@@ -16,7 +16,7 @@ repos:
   - repo: local
     hooks:
       - id: tdd-typecheck
-        name: typecheck (web + curation)
+        name: typecheck (web)
         entry: npm run typecheck:tdd
         language: system
         pass_filenames: false
@@ -28,7 +28,7 @@ repos:
         pass_filenames: false
 
       - id: tdd-test
-        name: test (web + curation)
+        name: test (web)
         entry: npm run test:tdd
         language: system
         pass_filenames: false

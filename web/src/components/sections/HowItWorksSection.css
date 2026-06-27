@@ -1,5 +1,5 @@
 .how-it-works {
-  background: linear-gradient(180deg, var(--color-bg-deep) 0%, var(--color-bg) 100%);
+  background: transparent;
 }
 
 .how-it-works__steps {
@@ -25,10 +25,9 @@
 .step-card {
   position: relative;
   padding: 1.5rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-bg-deep);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  backdrop-filter: blur(8px);
 }
 
 .step-card__num {
@@ -41,7 +40,7 @@
   font-family: var(--font-mono);
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--color-accent);
+  color: var(--color-accent-deep);
   background: var(--color-accent-subtle);
   border: 1px solid var(--color-accent-border);
   border-radius: 50%;
@@ -65,8 +64,8 @@
   padding: 0.75rem 1rem;
   font-family: var(--font-mono);
   font-size: clamp(0.65rem, 2.5vw, 0.75rem);
-  color: var(--color-accent-bright);
-  background: rgba(0, 0, 0, 0.35);
+  color: var(--color-neutral-700);
+  background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   overflow-x: auto;

@@ -3,11 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Frontend de beHuman — React + Vite + TypeScript",
+  "description": "Frontend de beHuman — landing y auth (React + Vite + TS)",
   "scripts": {
-    "predev": "bash scripts/copy-circuit.sh",
     "dev": "vite",
-    "build": "bash scripts/copy-circuit.sh && npm run typecheck && vite build",
+    "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
@@ -15,12 +14,11 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@behuman/shared": "*",
-    "@creit.tech/stellar-wallets-kit": "^1.7.3",
-    "@stellar/stellar-sdk": "^16.0.1",
+    "gsap": "^3.15.0",
+    "ogl": "^1.0.11",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "snarkjs": "^0.7.4"
+    "react-router-dom": "^7.18.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
@@ -36,7 +34,6 @@
     "typescript": "^5.4.0",
     "typescript-eslint": "^8.18.2",
     "vite": "^5.3.1",
-    "vite-plugin-node-polyfills": "^0.22.0",
     "vitest": "^2.1.8"
   }
 }

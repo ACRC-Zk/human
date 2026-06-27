@@ -58,18 +58,24 @@ button {
 }
 
 ::selection {
-  background: var(--color-accent-muted);
+  background: rgba(14, 165, 233, 0.18);
   color: var(--color-text);
 }
 
 .section-label {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--color-accent);
+  color: var(--color-accent-deep);
   margin-bottom: 0.75rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-subtle);
+  border: 1px solid var(--color-accent-border);
 }
 
 .section-title {

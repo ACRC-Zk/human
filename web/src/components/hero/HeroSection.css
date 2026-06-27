@@ -36,8 +36,7 @@
   margin-top: 0.15em;
   font-style: italic;
   font-weight: 600;
-  color: var(--color-accent);
-  text-shadow: 0 0 40px var(--color-accent-glow);
+  color: var(--color-text-muted);
 }
 
 .hero__lead {

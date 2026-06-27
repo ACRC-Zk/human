@@ -1,5 +1,5 @@
 .curation {
-  background: var(--color-bg-deep);
+  background: transparent;
 }
 
 .curation__grid {
@@ -18,7 +18,7 @@
   padding: 1.5rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-bg-deep);
 }
 
 .curation-card__level {
@@ -27,7 +27,7 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--color-accent);
+  color: var(--color-accent-deep);
   margin-bottom: 0.5rem;
 }
 
@@ -48,7 +48,7 @@
   margin: 2.5rem 0 0;
   padding: 1.25rem 1.5rem;
   border-left: 3px solid var(--color-accent);
-  background: rgba(249, 115, 22, 0.06);
+  background: var(--color-bg-deep);
   border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
 
