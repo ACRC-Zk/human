@@ -14,6 +14,9 @@ function readStoredLocale(): Locale {
   } catch {
     /* private mode / SSR */
   }
+  if (typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("es")) {
+    return "es";
+  }
   return "en";
 }
 

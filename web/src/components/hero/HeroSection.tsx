@@ -32,7 +32,7 @@ export function HeroSection() {
             {hero.ctaVerify}
           </Link>
           <Button
-            variant="secondary"
+            variant="ghost"
             onClick={() =>
               document.getElementById("como-funciona")?.scrollIntoView({ behavior: "smooth" })
             }

@@ -129,4 +129,96 @@ export interface SiteMessages {
     switchToEn: string;
     switchToEs: string;
   };
+  social: {
+    nav: {
+      feed: string;
+      threads: string;
+      messages: string;
+      notifications: string;
+      settings: string;
+      publish: string;
+      profile: string;
+      unread: string;
+    };
+    messages: {
+      title: string;
+      inbox: string;
+      chat: string;
+      unread: string;
+      empty: string;
+      pick: string;
+      exploreHint: string;
+      back: string;
+      placeholder: string;
+      send: string;
+      loading: string;
+      threadEmpty: string;
+      ariaChat: string;
+    };
+    feed: {
+      title: string;
+      sortNew: string;
+      sortHot: string;
+      loading: string;
+      empty: string;
+      threadEyebrow: string;
+      members: string;
+    };
+    explore: {
+      title: string;
+      subtitle: string;
+      create: string;
+    };
+    notifications: {
+      title: string;
+      markAll: string;
+      empty: string;
+      unread: string;
+    };
+    compose: {
+      title: string;
+      subtitle: string;
+    };
+    settings: {
+      title: string;
+      subtitle: string;
+      appearance: string;
+      theme: string;
+      themeLight: string;
+      themeDark: string;
+      themeSystem: string;
+      compactFeed: string;
+      compactFeedDesc: string;
+      reducedMotion: string;
+      reducedMotionDesc: string;
+      showSidebar: string;
+      showSidebarDesc: string;
+      language: string;
+      languageDesc: string;
+      privacy: string;
+      privacyProfile: string;
+      privacyProfileDesc: string;
+      privacyMessages: string;
+      privacyMessagesDesc: string;
+      account: string;
+      editProfileHint: string;
+      goToProfile: string;
+      reset: string;
+      resetDone: string;
+    };
+    profile: {
+      appSettings: string;
+      editProfile: string;
+      notFound: string;
+      notFoundBody: string;
+      backToFeed: string;
+      followers: string;
+      following: string;
+      postsTab: string;
+      publications: string;
+      backHome: string;
+      emptyOwnPosts: string;
+      emptyOtherPosts: string;
+    };
+  };
 }

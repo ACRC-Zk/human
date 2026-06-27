@@ -1,9 +1,29 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { brand } from "../../content/brand";
 import { useI18n } from "../../i18n/I18nProvider";
 import { LanguageToggle } from "../ui/LanguageToggle";
 import "./SiteNav.css";
+
+function NavAnchor({ href, className, children, onClick }: {
+  href: string;
+  className?: string;
+  children: ReactNode;
+  onClick?: () => void;
+}) {
+  if (href.startsWith("/")) {
+    return (
+      <Link to={href} className={className} onClick={onClick}>
+        {children}
+      </Link>
+    );
+  }
+  return (
+    <a href={href} className={className} onClick={onClick}>
+      {children}
+    </a>
+  );
+}
 
 export function SiteNav() {
   const { t } = useI18n();
@@ -28,9 +48,9 @@ export function SiteNav() {
 
         <nav className="site-nav__links" aria-label="Principal">
           {t.navLinks.map((link) => (
-            <a key={link.href} href={link.href} className="site-nav__link">
+            <NavAnchor key={link.href} href={link.href} className="site-nav__link">
               {link.label}
-            </a>
+            </NavAnchor>
           ))}
         </nav>
 
@@ -69,9 +89,14 @@ export function SiteNav() {
           <span className="site-nav__shine" />
         </div>
         {t.navLinks.map((link) => (
-          <a key={link.href} href={link.href} onClick={closeMenu} className="site-nav__mobile-link">
+          <NavAnchor
+            key={link.href}
+            href={link.href}
+            onClick={closeMenu}
+            className="site-nav__mobile-link"
+          >
             {link.label}
-          </a>
+          </NavAnchor>
         ))}
         <div className="site-nav__mobile-lang">
           <LanguageToggle />
