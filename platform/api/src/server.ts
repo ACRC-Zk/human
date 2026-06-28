@@ -95,14 +95,19 @@ app.post("/content", async (req, res) => {
   const s = load();
   const profile = s.profiles[platformId] ?? { username: "", handle: handleOf(platformId) };
 
-  // Nivel 1 — curaduría (solo contenido + seudónimo; nunca address). Fail-safe: si el
-  // curador no está disponible, se escala a revisión humana (no se auto-aprueba).
+  // Nivel 1 — curaduría (solo contenido + seudónimo; nunca address).
+  // Sin ANTHROPIC_API_KEY (dev/demo) la curaduría está deshabilitada → se aprueba (visible).
+  // Con clave: se evalúa; si el curador falla en ese caso, se escala a revisión humana.
   let curation: CurationVerdict;
-  try {
-    curation = await reviewPost({ platformId, handle: profile.handle, content });
-  } catch (err) {
-    console.error("[curation] no disponible:", (err as Error).message);
-    curation = { status: "escalated", reason: "Curador no disponible; revisión humana." };
+  if (!process.env.ANTHROPIC_API_KEY) {
+    curation = { status: "approved", reason: "curaduría deshabilitada (dev)" };
+  } else {
+    try {
+      curation = await reviewPost({ platformId, handle: profile.handle, content });
+    } catch (err) {
+      console.error("[curation] no disponible:", (err as Error).message);
+      curation = { status: "escalated", reason: "Curador no disponible; revisión humana." };
+    }
   }
 
   const item: PostItem = {
