@@ -70,7 +70,12 @@ export class PlatformApiError extends Error {
 async function parseJson<T>(res: Response): Promise<T> {
   const text = await res.text();
   if (!text) return {} as T;
-  return JSON.parse(text) as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    // Respuesta no-JSON (p.ej. el 404 de Express devuelve HTML). No es fatal.
+    return {} as T;
+  }
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -81,15 +86,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init?.headers,
     },
   });
-  const body = await parseJson<{ error?: string } & T>(res);
   if (!res.ok) {
+    // Endpoint inexistente (404) u otro error: NO parseamos el body (puede ser HTML).
+    // Extraemos el `error` solo si vino JSON; el llamador decide (isMissingEndpoint → 404/501).
+    const body = await parseJson<{ error?: string }>(res);
     throw new PlatformApiError(
       typeof body.error === "string" ? body.error : `HTTP ${res.status}`,
       res.status,
       body.error,
     );
   }
-  return body as T;
+  return parseJson<T>(res);
 }
 
 /** SHA-256 hex del contenido (contentHash para POST /content). */

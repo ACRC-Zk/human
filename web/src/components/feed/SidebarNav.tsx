@@ -32,18 +32,20 @@ export function SidebarNav() {
     { to: "/app/profile", label: n.profile, end: false as const, profile: true as const },
   ];
 
+  // Mensajes y notificaciones aún no tienen backend (fuera de alcance): no hacemos polling
+  // para no spamear 404. Cuando existan los endpoints, se reactiva el refresh periódico.
   useEffect(() => {
-    async function refresh() {
-      const [notif, msg] = await Promise.all([
-        getUnreadNotificationCount(),
-        getUnreadMessagesCount(user.platformId),
-      ]);
-      setUnreadNotif(notif);
-      setUnreadMsg(msg);
-    }
-    void refresh();
-    const id = window.setInterval(() => void refresh(), 5000);
-    return () => window.clearInterval(id);
+    let cancelled = false;
+    void Promise.all([getUnreadNotificationCount(), getUnreadMessagesCount(user.platformId)])
+      .then(([notif, msg]) => {
+        if (cancelled) return;
+        setUnreadNotif(notif);
+        setUnreadMsg(msg);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [user.platformId]);
 
   function renderItem(item: (typeof desktopNav)[number] | (typeof mobileNav)[number]) {
