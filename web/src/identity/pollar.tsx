@@ -20,7 +20,20 @@ export const POLLAR_ENABLED = POLLAR_KEY.length > 0;
 export function PollarRoot({ children }: { children: ReactNode }) {
   if (!POLLAR_ENABLED) return <>{children}</>;
   return (
-    <PollarProvider client={{ apiKey: POLLAR_KEY, stellarNetwork: "testnet" }}>
+    <PollarProvider
+      client={{ apiKey: POLLAR_KEY, stellarNetwork: "testnet" }}
+      // Forzamos que el modal muestre la opción de EMAIL (override local de /applications/config).
+      // Si el backend de Pollar no tiene email habilitado para esta app, habrá que activarlo en
+      // el dashboard o usar una publishable key con email; este override solo afecta la UI.
+      appConfig={{
+        application: { name: "beHuman" },
+        styles: {
+          emailEnabled: true,
+          embeddedWallets: true,
+          providers: { google: true },
+        },
+      }}
+    >
       {children}
     </PollarProvider>
   );
@@ -51,7 +64,7 @@ export function PollarEmailLogin({ onReady }: { onReady: () => void }) {
         openLoginModal();
       }}
     >
-      Crear cuenta con email
+      Crear cuenta con Google o email
     </Button>
   );
 }
