@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import SideRays from "../components/backgrounds/SideRays/SideRays";
+import { HeroBackground } from "../components/hero/HeroBackground";
 import { LanguageToggle } from "../components/ui/LanguageToggle";
 import { useI18n } from "../i18n/I18nProvider";
-import { useReducedMotion } from "../hooks/useReducedMotion";
 import { connectAndCheck } from "../identity/identity";
 import "./AuthPage.css";
 
@@ -16,7 +15,6 @@ export function AuthPage({ defaultTab = "login" }: { defaultTab?: AuthTab }) {
   const [tab, setTab] = useState<AuthTab>(defaultTab);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const reducedMotion = useReducedMotion();
 
   // Login: conecta la wallet y entra DIRECTO a la app. Si todavía no se verificó, la app
   // se lo pide al intentar publicar/donar (gating). Conectar = entrar.
@@ -123,21 +121,7 @@ export function AuthPage({ defaultTab = "login" }: { defaultTab?: AuthTab }) {
 
       <section className="auth-page__brand-panel" aria-label={auth.brandPanelLabel}>
         <div className="auth-page__rays" aria-hidden="true">
-          {!reducedMotion && (
-            <SideRays
-              origin="top-right"
-              rayColor1="#38bdf8"
-              rayColor2="#d4d4d4"
-              intensity={2.8}
-              spread={2.4}
-              speed={2.2}
-              saturation={1.55}
-              blend={0.62}
-              falloff={1.45}
-              opacity={1}
-              tilt={-6}
-            />
-          )}
+          <HeroBackground />
         </div>
 
         <div className="auth-page__brand-content">
