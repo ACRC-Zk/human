@@ -115,18 +115,62 @@ export async function postTweet(kp: StellarSdk.Keypair, p: PlatformProof): Promi
   return invoke(kp, contract().call("post", proofVal(p), pubVal(p)));
 }
 
-/**
- * Cotiza (sin enviar) el costo on-chain de anclar un post/artículo: arma la tx `post` y la
- * SIMULA contra la red para obtener la tarifa total real (base + recursos Soroban), en stroops.
- */
-export async function quotePost(kp: StellarSdk.Keypair, p: PlatformProof): Promise<bigint> {
+/** Simula (sin enviar) una operación y devuelve la tarifa total estimada en stroops. */
+async function simulateFee(kp: StellarSdk.Keypair, op: StellarSdk.xdr.Operation): Promise<bigint> {
   const account = await rpc.getAccount(kp.publicKey());
   const tx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: NETWORK_PASSPHRASE })
-    .addOperation(contract().call("post", proofVal(p), pubVal(p)))
+    .addOperation(op)
     .setTimeout(120)
     .build();
   const sim = await rpc.simulateTransaction(tx);
   if (StellarSdk.rpc.Api.isSimulationError(sim)) throw parseErr(sim.error) ?? new Error(sim.error);
-  const assembled = StellarSdk.rpc.assembleTransaction(tx, sim).build();
-  return BigInt(assembled.fee); // tarifa total estimada, en stroops (1 XLM = 1e7)
+  return BigInt(StellarSdk.rpc.assembleTransaction(tx, sim).build().fee); // 1 XLM = 1e7 stroops
+}
+
+export interface PublishQuote {
+  registerStroops: bigint; // costo una-sola-vez de registrar la identidad (0 si ya registrada)
+  postStroops: bigint; // costo de anclar el contenido
+  alreadyRegistered: boolean;
+  alreadyPosted: boolean; // este contenido ya estaba anclado (re-anclar no cuesta: inmutable)
+}
+
+/**
+ * Cotiza el costo on-chain de publicar SIN ENVIAR NADA (solo simula): registro de identidad
+ * (una sola vez) + anclaje del contenido. `idProof` ata contentHash="0" (registro); `postProof`
+ * ata el contentHash real. Read-only: a diferencia del anclaje, no manda transacciones.
+ */
+export async function quotePublish(
+  kp: StellarSdk.Keypair,
+  idProof: PlatformProof,
+  postProof: PlatformProof,
+): Promise<PublishQuote> {
+  // 1) Registro (one-time). Si ya está registrada, simular devuelve AlreadyRegistered (#3) → 0.
+  let registerStroops = 0n;
+  let alreadyRegistered = false;
+  try {
+    registerStroops = await simulateFee(kp, contract().call("register_identity", proofVal(idProof), pubVal(idProof)));
+  } catch (e) {
+    if (e instanceof ContractError && e.code === 3) alreadyRegistered = true;
+    else throw e;
+  }
+
+  // 2) Publicación.
+  let postStroops = 0n;
+  let alreadyPosted = false;
+  try {
+    postStroops = await simulateFee(kp, contract().call("post", proofVal(postProof), pubVal(postProof)));
+  } catch (e) {
+    if (e instanceof ContractError && e.code === 4) {
+      // Identidad aún no registrada → el contrato rechaza el `post` (estado dice no-registrada),
+      // así que no se puede simular. El costo del post está dominado por la verificación Groth16
+      // (igual que el registro) → lo estimamos con el costo del registro.
+      postStroops = registerStroops;
+    } else if (e instanceof ContractError && e.code === 5) {
+      alreadyPosted = true; // ya anclado: re-anclar no cuesta (inmutable)
+    } else {
+      throw e;
+    }
+  }
+
+  return { registerStroops, postStroops, alreadyRegistered, alreadyPosted };
 }
