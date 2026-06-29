@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { HeroBackground } from "../components/hero/HeroBackground";
 import { LanguageToggle } from "../components/ui/LanguageToggle";
 import { useI18n } from "../i18n/useI18n";
-import { connectAndCheck } from "../identity/identity";
+import { connectAndCheck, hasCredential } from "../identity/identity";
 import { clearLoggedOut } from "../feed/session";
 import { POLLAR_ENABLED, PollarEmailLogin } from "../identity/pollar";
 import "./AuthPage.css";
@@ -18,15 +18,17 @@ export function AuthPage({ defaultTab = "login" }: { defaultTab?: AuthTab }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Login: conecta la wallet y entra DIRECTO a la app. Si todavía no se verificó, la app
-  // se lo pide al intentar publicar/donar (gating). Conectar = entrar.
+  // Login: conecta la wallet. La identidad de plataforma vive en una credencial del device
+  // (no en la wallet, por anonimato). Si ya hay credencial en este navegador → entra al feed
+  // con su usuario. Si no → no hay "usuario" todavía: lo mandamos al onboarding (KYC) a crearla
+  // en vez de dejarlo entrar como invitado fantasma.
   async function handleLogin() {
     setError(null);
     setBusy(true);
     try {
       await connectAndCheck();
       clearLoggedOut();
-      navigate("/app");
+      navigate(hasCredential() ? "/app" : "/onboarding");
     } catch (e) {
       setError((e as Error).message);
     } finally {

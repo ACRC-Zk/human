@@ -36,7 +36,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const id = await derivePlatformIdentity();
+      let id: Awaited<ReturnType<typeof derivePlatformIdentity>> = null;
+      try {
+        id = await derivePlatformIdentity();
+      } catch (err) {
+        // Un error al derivar la identidad (p. ej. prueba ZK) no debe dejar al usuario
+        // como invitado en silencio: lo logueamos para diagnóstico.
+        console.error("[UserContext] derivePlatformIdentity falló:", err);
+      }
       if (cancelled) return;
       setActiveIdentity(id?.platformId ?? null);
       const base = loadSession();
