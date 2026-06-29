@@ -6,7 +6,7 @@ import * as StellarSdk from "@stellar/stellar-sdk";
 import { loadAnyCredential } from "../kyc/credentialStore";
 import { contentHashField, generatePlatformProof, platformIdHex } from "../platform/zk2";
 import { createFundedEphemeral } from "../platform/ephemeral";
-import { postTweet, quotePost, registerIdentity, ContractError } from "../platform/chain2";
+import { postTweet, quotePublish, registerIdentity, ContractError } from "../platform/chain2";
 
 export interface Anchored {
   platformId: string;
@@ -50,29 +50,39 @@ export async function anchorText(text: string): Promise<Anchored> {
   return { platformId, contentHash, txHash };
 }
 
-/** Cotiza (sin enviar) el costo on-chain de anclar `text`. Devuelve fee en XLM + stroops. */
-export async function quoteText(text: string): Promise<{ feeXlm: string; feeStroops: string; contentHash: string }> {
+export interface Quote {
+  feeXlm: string; // total estimado (registro one-time + publicación)
+  feeStroops: string;
+  registerXlm: string; // costo una-sola-vez de registrar la identidad ("0.0000000" si ya está)
+  postXlm: string; // costo de anclar este contenido
+  alreadyRegistered: boolean;
+  alreadyPosted: boolean; // este contenido ya estaba anclado (re-anclar no cuesta)
+  contentHash: string;
+}
+
+/**
+ * Cotiza el costo on-chain de anclar `text` SIN ENVIAR NADA (solo simula): registro de identidad
+ * (una vez) + publicación. Read-only: no toca el contrato. Devuelve total + desglose en XLM.
+ */
+export async function quoteText(text: string): Promise<Quote> {
   const cred = loadAnyCredential();
   if (!cred) throw new Error("necesitas_verificarte");
 
   const contentHash = await contentHashField(text);
-  const proof = await generatePlatformProof(cred, contentHash);
+  const postProof = await generatePlatformProof(cred, contentHash);
+  const idProof = await generatePlatformProof(cred, "0");
   const kp = await createFundedEphemeral();
 
-  let stroops: bigint;
-  try {
-    stroops = await quotePost(kp, proof);
-  } catch (e) {
-    if (e instanceof ContractError && e.code === 4) {
-      await ensureRegistered(kp, await generatePlatformProof(cred, "0"));
-      stroops = await quotePost(kp, proof);
-    } else {
-      throw e;
-    }
-  }
+  const q = await quotePublish(kp, idProof, postProof);
+  const total = q.registerStroops + q.postStroops;
+  const xlm = (s: bigint) => (Number(s) / 1e7).toFixed(7);
   return {
-    feeStroops: stroops.toString(),
-    feeXlm: (Number(stroops) / 1e7).toFixed(7),
+    feeStroops: total.toString(),
+    feeXlm: xlm(total),
+    registerXlm: xlm(q.registerStroops),
+    postXlm: xlm(q.postStroops),
+    alreadyRegistered: q.alreadyRegistered,
+    alreadyPosted: q.alreadyPosted,
     contentHash,
   };
 }

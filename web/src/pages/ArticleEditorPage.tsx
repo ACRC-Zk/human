@@ -43,7 +43,13 @@ export function ArticleEditorPage() {
   const [tab, setTab] = useState<"escribir" | "ver">("escribir");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [quote, setQuote] = useState<{ feeXlm: string } | null>(null);
+  const [quote, setQuote] = useState<{
+    feeXlm: string;
+    registerXlm: string;
+    postXlm: string;
+    alreadyRegistered: boolean;
+    alreadyPosted: boolean;
+  } | null>(null);
   const imgInput = useRef<HTMLInputElement>(null);
 
   const valid = title.trim().length >= 3 && content.trim().length >= 10;
@@ -67,7 +73,13 @@ export function ArticleEditorPage() {
     try {
       setBusy("Generando prueba ZK y simulando la transacción on-chain…");
       const q = await quoteArticle({ title: title.trim(), banner, content });
-      setQuote({ feeXlm: q.feeXlm });
+      setQuote({
+        feeXlm: q.feeXlm,
+        registerXlm: q.registerXlm,
+        postXlm: q.postXlm,
+        alreadyRegistered: q.alreadyRegistered,
+        alreadyPosted: q.alreadyPosted,
+      });
       setBusy(null);
     } catch (e) {
       setBusy(null);
@@ -177,10 +189,26 @@ export function ArticleEditorPage() {
           <Button onClick={onPublicar} disabled={!!busy || !valid}>Publicar</Button>
         </div>
         {quote && (
-          <p className="bh-note bh-note--ok">
-            Anclar este artículo cuesta ≈ <strong>{quote.feeXlm} XLM</strong> (tarifa de red Soroban).
-            Solo se sube un hash; el contenido queda fuera de la cadena y nadie podrá modificarlo.
-          </p>
+          <div className="bh-note bh-note--ok">
+            {quote.alreadyPosted ? (
+              <p style={{ margin: 0 }}>Este artículo ya está anclado on-chain (inmutable): re-anclarlo no tiene costo.</p>
+            ) : (
+              <>
+                <p style={{ margin: 0 }}>
+                  Anclar este artículo cuesta ≈ <strong>{quote.feeXlm} XLM</strong> (tarifa de red Soroban).
+                </p>
+                {!quote.alreadyRegistered && Number(quote.registerXlm) > 0 && (
+                  <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", opacity: 0.85 }}>
+                    Incluye el registro de tu identidad anónima (una sola vez): {quote.registerXlm} XLM ·
+                    publicación: {quote.postXlm} XLM.
+                  </p>
+                )}
+                <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", opacity: 0.85 }}>
+                  Solo se sube un hash; el contenido queda fuera de la cadena y nadie podrá modificarlo.
+                </p>
+              </>
+            )}
+          </div>
         )}
         {busy && <p className="bh-note">⏳ {busy}</p>}
         {error && <p className="bh-note bh-note--err">{error}</p>}
