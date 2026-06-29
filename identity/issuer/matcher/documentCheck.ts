@@ -11,7 +11,7 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createWorker, type Worker } from "tesseract.js";
-import { detectFace, loadModels } from "./faceEngine.js";
+import { detectFace, fitImage, loadModels } from "./faceEngine.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 function modelsPath(): string {
@@ -66,10 +66,13 @@ export interface DocAnalysis {
 /** OCR + detección de cara + extracción de candidatos (una sola pasada). */
 async function analyze(image: Buffer): Promise<DocAnalysis> {
   await loadModels(modelsPath());
-  const hasFace = !!(await detectFace(image));
+  // Reescalar una sola vez y reusar para cara + OCR (evita decodificar la imagen full-res
+  // dos veces; clave para no quedarnos sin memoria en instancias chicas).
+  const small = await fitImage(image);
+  const hasFace = !!(await detectFace(small));
 
   const worker = await getWorker();
-  const { data } = await worker.recognize(image);
+  const { data } = await worker.recognize(small);
   const text = normalize(data.text ?? "");
 
   const tokens = text.split(/\s+/).filter((t) => t.replace(/[^A-Z0-9]/g, "").length >= 3).length;

@@ -7,8 +7,27 @@
 // devuelve solo descriptores/landmarks para uso interno del gate (no salen del backend).
 import * as tf from "@tensorflow/tfjs-node";
 import * as faceapi from "@vladmandic/face-api";
+import sharp from "sharp";
 
 let loaded = false;
+
+// Las fotos de celular (DNI/selfie) pueden ser de varios megapíxeles; decodificarlas a
+// resolución completa dispara la memoria (un tensor de 4000x3000x3 ≈ 140MB) y mata el
+// proceso por OOM en instancias chicas. Reducimos a un lado máximo razonable ANTES de
+// decodificar/OCR: la detección de caras y el OCR no necesitan más que ~1280px.
+const MAX_DIM = Number(process.env.IMAGE_MAX_DIM) > 0 ? Number(process.env.IMAGE_MAX_DIM) : 1280;
+
+/** Reescala (manteniendo aspecto, sin agrandar) y normaliza orientación EXIF. Idempotente. */
+export async function fitImage(image: Buffer): Promise<Buffer> {
+  try {
+    return await sharp(image)
+      .rotate() // respeta la orientación EXIF (fotos de celular)
+      .resize({ width: MAX_DIM, height: MAX_DIM, fit: "inside", withoutEnlargement: true })
+      .toBuffer();
+  } catch {
+    return image; // si sharp falla, seguimos con el original (mejor que romper el flujo)
+  }
+}
 
 /** Carga los pesos de los modelos desde disco. Idempotente. */
 export async function loadModels(modelsPath: string): Promise<void> {
@@ -34,7 +53,7 @@ export async function detectFace(
   image: Buffer,
   minConfidence = 0.5,
 ): Promise<FaceData | null> {
-  const tensor = tf.node.decodeImage(image, 3) as unknown as tf.Tensor3D;
+  const tensor = tf.node.decodeImage(await fitImage(image), 3) as unknown as tf.Tensor3D;
   try {
     const result = await faceapi
       .detectSingleFace(tensor as never, new faceapi.SsdMobilenetv1Options({ minConfidence }))
