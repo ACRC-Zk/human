@@ -99,13 +99,63 @@ interface Store {
   resonates: Record<string, string[]>;
 }
 
+function emptyStore(): Store {
+  return { profiles: {}, posts: [], articles: [], articleOpinions: [], replies: [], resonates: {} };
+}
+
+// --- Persistencia durable (Upstash Redis) con fallback a archivo local ---
+// El disco de Render free es efímero → los posts se perdían al reiniciar. Si hay credenciales
+// de Upstash, el store vive ahí (sobrevive reinicios); si no, cae al archivo (dev local).
+// Solo guarda datos seudónimos (platformId + contenido + hashes), nunca PII ni el ZK secret.
+const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
+const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+const USE_UPSTASH = !!(UPSTASH_URL && UPSTASH_TOKEN);
+const STORE_KEY = "behuman:platform:store";
+
+async function upstashCmd(cmd: unknown[]): Promise<unknown> {
+  const res = await fetch(UPSTASH_URL!, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, "Content-Type": "application/json" },
+    body: JSON.stringify(cmd),
+  });
+  if (!res.ok) throw new Error(`upstash HTTP ${res.status}`);
+  return (await res.json() as { result: unknown }).result;
+}
+
+// Store en memoria (instancia única en free). Se hidrata al arrancar y se escribe write-through.
+let store: Store = emptyStore();
+
+async function hydrate(): Promise<void> {
+  if (USE_UPSTASH) {
+    try {
+      const raw = await upstashCmd(["GET", STORE_KEY]);
+      if (typeof raw === "string" && raw) store = { ...emptyStore(), ...(JSON.parse(raw) as Partial<Store>) };
+      console.log(`[store] hidratado desde Upstash (posts=${store.posts.length}, replies=${store.replies.length})`);
+      return;
+    } catch (e) {
+      console.error("[store] hydrate Upstash falló, uso archivo:", (e as Error).message);
+    }
+  }
+  if (existsSync(STORE)) store = { ...emptyStore(), ...(JSON.parse(readFileSync(STORE, "utf8")) as Partial<Store>) };
+}
+
 function load(): Store {
-  const base: Store = { profiles: {}, posts: [], articles: [], articleOpinions: [], replies: [], resonates: {} };
-  if (!existsSync(STORE)) return base;
-  return { ...base, ...(JSON.parse(readFileSync(STORE, "utf8")) as Partial<Store>) };
+  return store;
 }
 function save(s: Store): void {
-  writeFileSync(STORE, JSON.stringify(s, null, 2));
+  store = s;
+  if (USE_UPSTASH) {
+    // write-through (no bloqueamos la respuesta; logueamos si falla).
+    void upstashCmd(["SET", STORE_KEY, JSON.stringify(s)]).catch((e) =>
+      console.error("[store] persist Upstash falló:", (e as Error).message),
+    );
+  } else {
+    try {
+      writeFileSync(STORE, JSON.stringify(s, null, 2));
+    } catch {
+      /* dev sin permisos de escritura: ignorar */
+    }
+  }
 }
 
 /** Handle público: últimos 5 caracteres del platformId. */
@@ -451,7 +501,12 @@ app.post("/moderation/resolve", (req, res) => {
 // Render (y otros PaaS) asignan el puerto vía $PORT; en local usamos PLATFORM_API_PORT.
 const port = Number(process.env.PORT ?? process.env.PLATFORM_API_PORT ?? 8788);
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  app.listen(port, () => console.log(`beHuman platform API en :${port}`));
+  // Hidratar el store (Upstash o archivo) ANTES de escuchar, así el feed arranca completo.
+  void hydrate().then(() => {
+    app.listen(port, () =>
+      console.log(`beHuman platform API en :${port} (store: ${USE_UPSTASH ? "Upstash" : "archivo"})`),
+    );
+  });
 }
 
 export { app };
