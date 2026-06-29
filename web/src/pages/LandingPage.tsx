@@ -11,6 +11,7 @@ import { LayersSection } from "../components/sections/LayersSection";
 import { PlatformSection } from "../components/sections/PlatformSection";
 import { useI18n } from "../i18n/I18nProvider";
 import "../App.css";
+import "../components/sections/landing-cards.css";
 import "./LandingPage.css";
 
 export function LandingPage() {
