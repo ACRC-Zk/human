@@ -27,6 +27,7 @@ export type CurationLevel = {
 };
 
 export type StellarItem = {
+  id: string;
   name: string;
   hint: string;
 };

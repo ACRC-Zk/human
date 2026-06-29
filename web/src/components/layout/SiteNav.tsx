@@ -40,7 +40,7 @@ export function SiteNav() {
 
         <a href="#" className="site-nav__brand" onClick={closeMenu}>
           <img
-            src={brand.logoHorizontal}
+            src={brand.logoNav}
             alt={brand.wordmark}
             className="site-nav__logo"
           />

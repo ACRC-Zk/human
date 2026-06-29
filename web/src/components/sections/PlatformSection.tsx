@@ -26,7 +26,7 @@ export function PlatformSection() {
             </span>
           ))}
         </ScrollReveal>
-        <BentoSection className="platform__grid">
+        <BentoSection className="platform__grid landing-card-grid">
           {platform.features.map((feature, index) => (
             <ScrollReveal key={feature.title} delay={index * 100}>
               <MagicBentoCard as="article" className="platform-card">
