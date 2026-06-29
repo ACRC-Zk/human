@@ -145,6 +145,13 @@ export function SettingsPage() {
         <Link to="/app/profile" className="settings-page__link-btn">
           {s.goToProfile}
         </Link>
+        <div className="settings-page__static" style={{ marginTop: "0.85rem" }}>
+          <p className="settings-page__static-title">{s.moderationLink}</p>
+          <p className="settings-page__static-desc">{s.moderationLinkDesc}</p>
+          <Link to="/app/moderation" className="settings-page__link-btn" style={{ marginTop: "0.5rem" }}>
+            {t.social.moderation.openPanel}
+          </Link>
+        </div>
         <button type="button" className="settings-page__reset" onClick={resetAll}>
           {resetFlash ? s.resetDone : s.reset}
         </button>

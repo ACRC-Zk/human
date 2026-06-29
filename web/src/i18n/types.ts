@@ -205,6 +205,8 @@ export interface SiteMessages {
       goToProfile: string;
       reset: string;
       resetDone: string;
+      moderationLink: string;
+      moderationLinkDesc: string;
     };
     profile: {
       appSettings: string;
@@ -219,6 +221,25 @@ export interface SiteMessages {
       backHome: string;
       emptyOwnPosts: string;
       emptyOtherPosts: string;
+    };
+    moderation: {
+      title: string;
+      subtitle: string;
+      privacyNote: string;
+      queueLabel: string;
+      empty: string;
+      refresh: string;
+      approve: string;
+      flag: string;
+      agentReason: string;
+      reportReason: string;
+      sourceAgent: string;
+      sourceReport: string;
+      sourceBoth: string;
+      reportsCount: string;
+      backSettings: string;
+      openPanel: string;
+      openPanelDesc: string;
     };
   };
 }
