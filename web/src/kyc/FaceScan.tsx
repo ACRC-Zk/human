@@ -71,6 +71,16 @@ export function FaceScan({ onCaptured }: { onCaptured: (frames: Blob[]) => void 
       <p className="bh-eyebrow">Paso 3 de 3</p>
       <h2 className="bh-h2">Escaneo de cara</h2>
       <p className="bh-sub">{status}</p>
+
+      <div className="bh-banner bh-banner--info">
+        <strong>Para validar tu rostro:</strong>
+        <ul className="bh-list">
+          <li>🔆 Buscá <strong>buena iluminación</strong>, de frente — evitá el contraluz y las sombras.</li>
+          <li>🎯 Centrá tu <strong>cara en el cuadro</strong>, a una distancia media (ni muy cerca ni lejos).</li>
+          <li>🙂 Sin lentes oscuros ni gorra, y seguí las indicaciones que aparecen abajo.</li>
+        </ul>
+      </div>
+
       <video ref={videoRef} playsInline muted className="bh-video" />
       {prompt && <p className="bh-note" style={{ fontWeight: 600, color: "var(--color-text)" }}>{prompt}</p>}
       <div className="bh-actions">

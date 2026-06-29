@@ -107,6 +107,9 @@
 .bh-banner--warn { background: rgba(180, 83, 9, 0.1); color: #92400e; }
 .bh-banner--err { background: rgba(220, 38, 38, 0.08); color: var(--color-error); }
 .bh-banner--ok { background: var(--color-accent-subtle); color: var(--color-accent-deep); }
+.bh-banner--info { background: rgba(37, 99, 235, 0.08); color: #1e40af; }
+.bh-banner--info .bh-list { margin: 0.4rem 0 0; padding-left: 1.1rem; }
+.bh-banner--info .bh-list li { margin: 0.25rem 0; }
 
 .bh-video {
   width: 100%;

@@ -49,9 +49,11 @@ export function Attributes({ onNext }: { onNext: (a: AttributesInput) => void })
         <input className="bh-input" value={docId} onChange={(e) => setDocId(e.target.value)} placeholder="12345678" />
       </label>
 
-      <p className="bh-note">
-        Estos datos se <strong>cotejan contra tu DNI</strong>: si no coinciden, se te pedirá un documento válido.
-      </p>
+      <div className="bh-banner bh-banner--info">
+        Ingresá los datos <strong>tal como figuran en tu DNI</strong> (año y nº exactos). Se
+        <strong> cotejan contra la foto</strong>: si no coinciden o el documento no se llega a leer,
+        volvé a subir una foto <strong>horizontal, centrada y con buena luz</strong>.
+      </div>
       <div className="bh-actions">
         <Button disabled={!valid} onClick={() => onNext({ birthYear: year, countryCode, docId: docId.trim() })}>
           Cotejar con el DNI y continuar

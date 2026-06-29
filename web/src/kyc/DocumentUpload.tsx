@@ -49,6 +49,16 @@ export function DocumentUpload({
       <p className="bh-sub">
         Subí una foto del <strong>frente de tu documento</strong> donde se vea tu cara.
       </p>
+
+      <div className="bh-banner bh-banner--info">
+        <strong>Para que se lea bien:</strong>
+        <ul className="bh-list">
+          <li>📐 Colocá el DNI en <strong>horizontal</strong> (apaisado), derecho y sin inclinar.</li>
+          <li>🎯 Que entre <strong>completo y centrado</strong> en la foto, bien cerca.</li>
+          <li>🔆 Buena luz y <strong>sin reflejos ni sombras</strong>: el texto tiene que verse <strong>nítido y legible</strong>.</li>
+        </ul>
+      </div>
+
       {notice && <div className="bh-banner bh-banner--warn">⚠️ {notice}</div>}
 
       <input className="bh-input" type="file" accept="image/*" onChange={onPick} />
