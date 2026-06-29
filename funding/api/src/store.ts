@@ -23,12 +23,57 @@ export interface FundingState {
 
 const EMPTY: FundingState = { campaigns: [], donations: [], opinions: [], nullifiers: {} };
 
+// --- Persistencia durable (Upstash Redis) con fallback a archivo local ---
+// El disco de Render free es efímero → las campañas se perderían al reiniciar. Con credenciales
+// de Upstash el store vive ahí; si no, cae al archivo (dev). Solo datos seudónimos, sin PII.
+const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
+const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+const USE_UPSTASH = !!(UPSTASH_URL && UPSTASH_TOKEN);
+const STORE_KEY = "behuman:funding:store";
+
+async function upstashCmd(cmd: unknown[]): Promise<unknown> {
+  const res = await fetch(UPSTASH_URL!, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, "Content-Type": "application/json" },
+    body: JSON.stringify(cmd),
+  });
+  if (!res.ok) throw new Error(`upstash HTTP ${res.status}`);
+  return (await res.json() as { result: unknown }).result;
+}
+
+// Store en memoria (instancia única en free). Se hidrata al arrancar; write-through en save.
+let state: FundingState = structuredClone(EMPTY);
+
+export async function hydrate(): Promise<void> {
+  if (USE_UPSTASH) {
+    try {
+      const raw = await upstashCmd(["GET", STORE_KEY]);
+      if (typeof raw === "string" && raw) state = { ...structuredClone(EMPTY), ...(JSON.parse(raw) as Partial<FundingState>) };
+      console.log(`[funding-store] hidratado desde Upstash (campaigns=${state.campaigns.length})`);
+      return;
+    } catch (e) {
+      console.error("[funding-store] hydrate Upstash falló, uso archivo:", (e as Error).message);
+    }
+  }
+  if (existsSync(STORE)) state = { ...structuredClone(EMPTY), ...(JSON.parse(readFileSync(STORE, "utf8")) as Partial<FundingState>) };
+}
+
 export function load(): FundingState {
-  if (!existsSync(STORE)) return structuredClone(EMPTY);
-  return { ...structuredClone(EMPTY), ...(JSON.parse(readFileSync(STORE, "utf8")) as Partial<FundingState>) };
+  return state;
 }
 export function save(s: FundingState): void {
-  writeFileSync(STORE, JSON.stringify(s, null, 2));
+  state = s;
+  if (USE_UPSTASH) {
+    void upstashCmd(["SET", STORE_KEY, JSON.stringify(s)]).catch((e) =>
+      console.error("[funding-store] persist Upstash falló:", (e as Error).message),
+    );
+  } else {
+    try {
+      writeFileSync(STORE, JSON.stringify(s, null, 2));
+    } catch {
+      /* dev sin permisos: ignorar */
+    }
+  }
 }
 
 // ─── Serialización de escrituras (RT-06) ──────────────────────────────────────

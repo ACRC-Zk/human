@@ -42,7 +42,7 @@ import type {
   Milestone,
   Sentiment,
 } from "@behuman/shared";
-import { claimNullifier, load, withStore } from "./store.js";
+import { claimNullifier, hydrate, load, withStore } from "./store.js";
 import {
   verifyFundingOpinion,
   verifyMembership,
@@ -491,9 +491,13 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ error: "internal_error" });
 });
 
-const port = Number(process.env.FUNDING_API_PORT ?? 8789);
+// Render (y otros PaaS) asignan el puerto vía $PORT; en local usamos FUNDING_API_PORT.
+const port = Number(process.env.PORT ?? process.env.FUNDING_API_PORT ?? 8789);
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  app.listen(port, () => console.log(`beHuman funding API en :${port} (provider=${provider}, asset=${ASSET})`));
+  // Hidratar el store (Upstash o archivo) ANTES de escuchar, así las campañas arrancan completas.
+  void hydrate().then(() => {
+    app.listen(port, () => console.log(`beHuman funding API en :${port} (provider=${provider}, asset=${ASSET})`));
+  });
 }
 
 export { app };
