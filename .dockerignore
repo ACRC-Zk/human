@@ -1,0 +1,16 @@
+# Contexto de build mínimo para la imagen del matcher (Cloud Run).
+**/node_modules
+.git
+.github
+**/dist
+web/dist
+web/.vercel
+.deploy
+**/*.log
+# Modelos: se descargan frescos en el build (no copiar los locales).
+identity/issuer/matcher/models
+# Estado local del issuer y secretos: nunca van a la imagen.
+identity/issuer/.issuer-state*.json
+.env
+**/.env
+**/.env.*
