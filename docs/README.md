@@ -1,6 +1,6 @@
-# docs · beHuman
+# docs · human
 
-Este repo (`beHuman`) es **solo código**. Todo el **diseño, la teoría y las decisiones**
+Este repo (`human`) es **solo código**. Todo el **diseño, la teoría y las decisiones**
 del producto viven en la **vault de Obsidian**, en el repo hermano `obsidian-vault-zk`.
 
 ## Mapa: documentación ↔ código
